@@ -18,14 +18,20 @@
                     </div>
                     <div class="col-md-6 border-start">
                         <button class="btn btn-outline-success w-100 fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#uploadBox">
-                            📤 手動預覽本地 JSON
+                            📤 上傳 JSON 至雲端資料庫
                         </button>
-                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">不寫入資料庫，僅供即時查看</small>
+                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">資料將永久保存，重整不會消失</small>
                     </div>
                 </div>
                 <div class="collapse mt-3" id="uploadBox">
                     <div class="card card-body bg-light border-0">
-                        <input type="file" @change="handleFileUpload" class="form-control" accept=".json">
+                        <div class="d-flex gap-2 align-items-center justify-content-center">
+                            <input type="file" @change="handleFileSelect" class="form-control w-75" accept=".json">
+                            <button @click="uploadToServer" class="btn btn-success fw-bold" :disabled="!selectedFile || isUploading">
+                                <span v-if="isUploading" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                {{ isUploading ? '上傳中...' : '確認上傳' }}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -292,7 +298,7 @@
       <p class="mt-2 text-muted fw-bold" v-if="isLoading">載入最新戰情數據中...</p>
       <div v-else>
           <p class="text-muted fw-bold">目前資料庫尚無數據 📭</p>
-          <p class="text-small">請等待 Python 爬蟲將最新數據推播至 API，或點擊上方按鈕預覽本地 JSON。</p>
+          <p class="text-small">請等待 Python 爬蟲將最新數據推播至 API，或點擊上方按鈕手動上傳 JSON。</p>
       </div>
     </div>
 
@@ -307,14 +313,15 @@ import { ref, computed } from 'vue'
 
 const rawResponseData = ref(null)
 const isLoading = ref(true)
+const selectedFile = ref(null)
+const isUploading = ref(false)
 
-// 取得最新資料
+// 1. 取得資料庫最新資料
 const { data: response } = await useFetch('/api/latest')
-
 if (response.value && response.value.data) {
   rawResponseData.value = response.value.data
 }
-isLoading.value = false // 結束載入狀態
+isLoading.value = false 
 
 // 整理供畫面綁定的 Computed 變數
 const dashboardData = computed(() => rawResponseData.value)
@@ -323,30 +330,53 @@ const dataSourceDisplay = computed(() => {
   if (!dashboardData.value) return '無數據'
   const content = dashboardData.value.content
   const source = dashboardData.value.source_type || '未知來源'
+  // 優先使用 JSON 裡的更新時間，否則使用資料庫寫入時間
   const timeStr = content.update_time || new Date(dashboardData.value.created_at).toLocaleString('zh-TW')
   return `${source} (時間: ${timeStr})`
 })
 
-// 本機預覽功能 (不寫入資料庫)
-const handleFileUpload = (event) => {
-  const file = event.target.files[0]
-  if (!file) return
-  
+// 2. 選擇檔案 (綁定 input 標籤)
+const handleFileSelect = (event) => {
+  selectedFile.value = event.target.files[0]
+}
+
+// 3. 真正上傳至伺服器資料庫的邏輯
+const uploadToServer = async () => {
+  if (!selectedFile.value) return
+  isUploading.value = true
+
   const reader = new FileReader()
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const parsedData = JSON.parse(e.target.result)
-      rawResponseData.value = {
-        content: parsedData,
-        source_type: '本機端直接預覽',
-        created_at: new Date().toISOString()
-      }
-      alert('本機 JSON 載入成功！')
+      
+      // 發送 POST 請求到我們建立的 API (/api/upload.post.ts)
+      await $fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'X-Api-Key': 'macrowave168' // 需與後端 API 及環境變數 API_UPLOAD_KEY 吻合
+        },
+        body: parsedData
+      })
+
+      alert('上傳成功！資料已永久儲存至 Supabase。')
+      
+      // 上傳成功後，重新整理網頁以拉取最新資料庫數據
+      window.location.reload()
+
     } catch (err) {
-      alert('檔案解析失敗，請確認是否為有效的 JSON。')
+      alert('上傳失敗，請確認資料庫與 API 設定：\n' + err.message)
+    } finally {
+      isUploading.value = false
     }
   }
-  reader.readAsText(file)
+  
+  reader.onerror = () => {
+    alert('讀取檔案失敗')
+    isUploading.value = false
+  }
+  
+  reader.readAsText(selectedFile.value)
 }
 </script>
 
