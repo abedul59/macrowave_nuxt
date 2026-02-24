@@ -3,7 +3,7 @@ import { serverSupabaseClient } from '#supabase/server'
 export default defineEventHandler(async (event) => {
   const client = await serverSupabaseClient(event)
   
-  // 取得最新一筆資料，對應原 Django DashboardData.objects.first()
+  // 抓取 created_at 最新的一筆資料
   const { data, error } = await client
     .from('dashboard_data')
     .select('*')
