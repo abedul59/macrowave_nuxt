@@ -1,28 +1,29 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
 
 export default defineEventHandler(async (event) => {
-  // 1. 檢查密鑰 (對應原 Django request.headers.get('X-Api-Key'))
+  // 檢查 API 密鑰 (請確認與您 .env 中的設定一致，這裡預設用 macrowave168)
   const apiKey = getHeader(event, 'x-api-key') || getHeader(event, 'api_key')
-  const validKey = process.env.API_UPLOAD_KEY
+  const validKey = process.env.API_UPLOAD_KEY || 'macrowave168'
 
   if (apiKey !== validKey) {
     throw createError({ statusCode: 403, statusMessage: '密鑰錯誤 (Invalid API Key)' })
   }
 
-  // 2. 解析 JSON Body (對應原 GUI 遠端上傳 Direct)
+  // 讀取傳入的 JSON 數據
   const body = await readBody(event)
   if (!body) {
     throw createError({ statusCode: 400, statusMessage: '未找到有效數據' })
   }
 
+  // 整理要存入 Supabase 的格式
   const payload = {
     content: body,
-    source_type: 'GUI 遠端上傳 (Direct)'
+    source_type: 'GUI JSON 上傳'
   }
 
-  // 3. 寫入 Supabase
+  // 寫入 Supabase 資料庫的 dashboard_data 資料表
   const client = serverSupabaseServiceRole(event)
-  const { data, error } = await client
+  const { error } = await client
     .from('dashboard_data')
     .insert([payload])
 
@@ -30,5 +31,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: error.message })
   }
 
-  return { status: 'success', message: '數據同步成功' }
+  return { status: 'success', message: '資料庫上傳成功' }
 })
