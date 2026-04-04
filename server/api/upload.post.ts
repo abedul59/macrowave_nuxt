@@ -1,7 +1,7 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
 
 export default defineEventHandler(async (event) => {
-  // 檢查 API 密鑰 (請確認與您 .env 中的設定一致，這裡預設用 macrowave168)
+  // 檢查 API 密鑰
   const apiKey = getHeader(event, 'x-api-key') || getHeader(event, 'api_key')
   const validKey = process.env.API_UPLOAD_KEY || 'macrowave168'
 
@@ -15,10 +15,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: '未找到有效數據' })
   }
 
+  // 自動判斷來源：如果是 Python 爬蟲推送過來的，User-Agent 通常包含 python-requests
+  const userAgent = getHeader(event, 'user-agent') || ''
+  const isFromPython = userAgent.toLowerCase().includes('python')
+  const sourceType = isFromPython ? 'Hugging Face 自動同步' : 'GUI JSON 手動上傳'
+
   // 整理要存入 Supabase 的格式
   const payload = {
     content: body,
-    source_type: 'GUI JSON 上傳'
+    source_type: sourceType
   }
 
   // 寫入 Supabase 資料庫的 dashboard_data 資料表
