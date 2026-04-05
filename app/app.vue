@@ -44,6 +44,23 @@
                         </div>
                     </div>
                 </div>
+
+                <hr class="my-4 text-muted">
+                <div class="row align-items-center">
+                    <div class="col-md-4 text-md-end mb-2 mb-md-0">
+                        <span class="fw-bold text-secondary">🔗 外部系統聯動：</span>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-dark w-100 fw-bold shadow-sm" type="button" @click="triggerTwstockSync" :disabled="isSyncingTwstock">
+                            <span v-if="isSyncingTwstock" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            {{ isSyncingTwstock ? 'Twstock168 更新中...' : '🚀 獨立更新 Twstock168' }}
+                        </button>
+                    </div>
+                    <div class="col-md-4 text-start">
+                        <small class="text-muted d-block" style="font-size: 0.75rem;">喚醒 Render 並自動爬蟲寫入 (約 2.5 分鐘)</small>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -346,7 +363,7 @@ const dataSourceDisplay = computed(() => {
 })
 
 // =====================================
-// Hugging Face API 雲端爬蟲觸發邏輯
+// 1. Hugging Face API (原版: 爬蟲推回 Nuxt)
 // =====================================
 const isSyncing = ref(false)
 
@@ -355,7 +372,7 @@ const triggerSync = async () => {
   
   isSyncing.value = true
   try {
-    // API 網址：打給 Hugging Face 啟動爬蟲
+    // 您的主要 HF Space API 網址
     const hfApiUrl = 'https://lawxstudents168-macrowave-scrape-api.hf.space/api/trigger-sync'
     
     const response = await $fetch(hfApiUrl, {
@@ -375,6 +392,40 @@ const triggerSync = async () => {
   } catch (err) {
     alert('❌ 觸發爬蟲失敗，請檢查 Hugging Face 網址或伺服器狀態：\n' + err.message)
     isSyncing.value = false
+  }
+}
+
+// =====================================
+// 2. Hugging Face API (獨立版: 填表更新 Twstock168)
+// =====================================
+const isSyncingTwstock = ref(false)
+
+const triggerTwstockSync = async () => {
+  if (!confirm('確定要獨立更新 Twstock168 網站嗎？\n這將會呼叫您專屬的第二個 Hugging Face Space。整體約需 2.5 分鐘。')) return
+  
+  isSyncingTwstock.value = true
+  try {
+    // ⚠️ 這裡填入您「第二個」獨立 Hugging Face Space 的 API 網址
+    const newHfApiUrl = 'https://lawxstudents168-twstock168-scrape-api.hf.space/api/trigger-twstock-sync'
+    
+    const response = await $fetch(newHfApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    alert(`✅ 已成功發送指令！\n伺服器回應：${response.message}`)
+    
+    // 設定 150 秒後，將按鈕恢復為可點擊狀態
+    setTimeout(() => {
+      isSyncingTwstock.value = false
+      alert('🎯 Twstock168 網站的背景更新流程應已執行完畢！您可以前往該網站確認。')
+    }, 150000)
+
+  } catch (err) {
+    alert('❌ 觸發更新失敗，請檢查新 Hugging Face 的網址或狀態：\n' + err.message)
+    isSyncingTwstock.value = false
   }
 }
 
