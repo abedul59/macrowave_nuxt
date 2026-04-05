@@ -22,7 +22,7 @@
                             <span v-if="isSyncing" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
                             {{ isSyncing ? '爬蟲執行中...' : '🔄 啟動雲端爬蟲 (API)' }}
                         </button>
-                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">Hugging Face 伺服器 (約需2分鐘)</small>
+                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">Hugging Face 伺服器 (約需 3 分鐘)</small>
                     </div>
 
                     <div class="col-md-4">
@@ -351,11 +351,11 @@ const dataSourceDisplay = computed(() => {
 const isSyncing = ref(false)
 
 const triggerSync = async () => {
-  if (!confirm('確定要啟動雲端爬蟲嗎？\n資料將在背景抓取，約需 90~120 秒後自動更新至本站。')) return
+  if (!confirm('確定要啟動雲端爬蟲嗎？\n資料將在背景抓取，約需 3 分鐘後自動更新至本站。')) return
   
   isSyncing.value = true
   try {
-    // 已更新為使用者指定的 HF Space 網址
+    // API 網址：打給 Hugging Face 啟動爬蟲
     const hfApiUrl = 'https://lawxstudents168-macrowave-scrape-api.hf.space/api/trigger-sync'
     
     const response = await $fetch(hfApiUrl, {
@@ -365,12 +365,12 @@ const triggerSync = async () => {
       }
     })
     
-    alert(`✅ 已成功發送指令！\n伺服器回應：${response.message}\n\n系統將在 2 分鐘後自動重整網頁。`)
+    alert(`✅ 已成功發送指令！\n伺服器回應：${response.message}\n\n系統將在 3 分鐘後自動重整網頁。`)
     
-    // 設定 120 秒 (120,000 毫秒) 後自動重整網頁
+    // 設定 180 秒 (180,000 毫秒) 後自動重整網頁，避免 Race Condition
     setTimeout(() => {
       window.location.reload()
-    }, 120000)
+    }, 180000)
 
   } catch (err) {
     alert('❌ 觸發爬蟲失敗，請檢查 Hugging Face 網址或伺服器狀態：\n' + err.message)
