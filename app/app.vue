@@ -20,9 +20,9 @@
                     <div class="col-md-4 mb-3 mb-md-0 border-start border-end">
                         <button class="btn btn-outline-danger w-100 fw-bold" type="button" @click="triggerSync" :disabled="isSyncing">
                             <span v-if="isSyncing" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                            {{ isSyncing ? '爬蟲執行中...' : '🔄 啟動雲端爬蟲 (API)' }}
+                            {{ isSyncing ? '尋找伺服器並執行...' : '🔄 啟動雲端爬蟲 (API)' }}
                         </button>
-                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">Hugging Face 伺服器 (約需 3 分鐘)</small>
+                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">分散使用 3 個 HF 帳號備援 (約需 3 分鐘)</small>
                     </div>
 
                     <div class="col-md-4">
@@ -363,7 +363,7 @@ const dataSourceDisplay = computed(() => {
 })
 
 // =====================================
-// 1. Hugging Face API (原版: 爬蟲推回 Nuxt)
+// 1. Hugging Face API (升級版：3 帳號負載平衡與自動備援)
 // =====================================
 const isSyncing = ref(false)
 
@@ -371,27 +371,50 @@ const triggerSync = async () => {
   if (!confirm('確定要啟動雲端爬蟲嗎？\n資料將在背景抓取，約需 3 分鐘後自動更新至本站。')) return
   
   isSyncing.value = true
-  try {
-    // 您的主要 HF Space API 網址
-    const hfApiUrl = 'https://lawxstudents168-macrowave-scrape-api.hf.space/api/trigger-sync'
-    
-    const response = await $fetch(hfApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-    
-    alert(`✅ 已成功發送指令！\n伺服器回應：${response.message}\n\n系統將在 3 分鐘後自動重整網頁。`)
-    
-    // 設定 180 秒 (180,000 毫秒) 後自動重整網頁，避免 Race Condition
-    setTimeout(() => {
-      window.location.reload()
-    }, 180000)
+  
+  // ⚠️ 這裡已為您設定好 3 個備援的 HF Space 網址
+  // (如果您當初建立的 Space 名稱不是 macrowave-scrape-api，請記得修改)
+  const hfBaseUrls = [
+    'https://pyfbsdk59-macrowave-scrape-api.hf.space',
+    'https://lawxstudents168-macrowave-scrape-api.hf.space',
+    'https://igveri59-macrowave-scrape-api.hf.space'
+  ]
+  
+  // 隨機打亂網址順序，實現「負載平衡」，不讓同一台機器連續操勞
+  const shuffledUrls = [...hfBaseUrls].sort(() => 0.5 - Math.random())
 
-  } catch (err) {
-    alert('❌ 觸發爬蟲失敗，請檢查 Hugging Face 網址或伺服器狀態：\n' + err.message)
-    isSyncing.value = false
+  for (let i = 0; i < shuffledUrls.length; i++) {
+    // 組合出完整的 API 路徑
+    const currentUrl = `${shuffledUrls[i]}/api/trigger-sync`
+    console.log(`嘗試連線備援伺服器 ${i + 1}/3: ${currentUrl}`)
+
+    try {
+      const apiResponse = await $fetch(currentUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000 // 15秒 timeout，如果該台伺服器當機或喚醒太慢，就果斷放棄換下一台
+      })
+      
+      alert(`✅ 已成功發送爬蟲指令！(由備援節點 ${i + 1} 接單)\n伺服器回應：${apiResponse.message}\n\n系統將在 3 分鐘後自動重整網頁。`)
+      
+      // 設定 180 秒 (180,000 毫秒) 後自動重整網頁
+      setTimeout(() => {
+        window.location.reload()
+      }, 180000)
+      
+      break // 成功命中，跳出迴圈！
+
+    } catch (err) {
+      console.warn(`伺服器 ${currentUrl} 忙碌、休眠或逾時，準備切換下一台...`, err)
+      
+      // 如果已經嘗試到最後一台還是失敗
+      if (i === shuffledUrls.length - 1) {
+        alert('❌ 觸發爬蟲失敗！三台 HF 伺服器均無回應或已滿載 (Paused)，請稍後再試。')
+        isSyncing.value = false
+      }
+    }
   }
 }
 
@@ -408,14 +431,14 @@ const triggerTwstockSync = async () => {
     // ⚠️ 這裡填入您「第二個」獨立 Hugging Face Space 的 API 網址
     const newHfApiUrl = 'https://lawxstudents168-twstock168-scrape-api.hf.space/api/trigger-twstock-sync'
     
-    const response = await $fetch(newHfApiUrl, {
+    const apiResponse = await $fetch(newHfApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       }
     })
     
-    alert(`✅ 已成功發送指令！\n伺服器回應：${response.message}`)
+    alert(`✅ 已成功發送指令！\n伺服器回應：${apiResponse.message}`)
     
     // 設定 150 秒後，將按鈕恢復為可點擊狀態
     setTimeout(() => {
