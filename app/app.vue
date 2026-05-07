@@ -19,6 +19,7 @@
     <div class="tab-content" id="myTabContent">
       
       <div class="tab-pane fade show active" id="macro" role="tabpanel">
+        
         <div class="container mb-4">
             <div class="card shadow-sm">
                 <div class="card-body">
@@ -54,7 +55,7 @@
                     <hr class="my-4 text-muted">
                     
                     <div class="row align-items-center g-3">
-                        <div class="col-md-3 text-md-end">
+                        <div class="col-md-3 text-md-center text-lg-end">
                             <span class="fw-bold text-secondary">🔗 外部系統聯動：</span>
                         </div>
                         <div class="col-md-4">
@@ -70,111 +71,111 @@
                             </a>
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>
 
         <div class="container" v-if="dashboardData">
-            <div class="col-12 mb-4">
-                <div class="card text-center p-4 bg-white">
-                    <h5 class="text-muted mb-3 text-uppercase ls-1">Mark 17 總經風險評分</h5>
-                    <div class="d-flex justify-content-center align-items-center gap-4 flex-wrap">
-                        <div class="d-flex align-items-baseline">
-                            <span class="display-3 fw-bold text-dark">{{ dashboardData.content.total_score }}</span>
-                            <span class="text-muted fs-4 ms-2">/ 15</span>
-                        </div>
-                        <div :class="['advice-badge', 'advice-' + dashboardData.content.advice]">策略建議: {{ dashboardData.content.advice }}</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-4 col-md-12 mb-4" v-if="dashboardData.content.us_jp_spread">
-                <div class="card h-100">
-                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                        <span>📉 美日債券利差</span>
-                        <small class="opacity-75">門檻: 2.0%</small>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <span class="text-muted">🇺🇸 美債 10Y</span>
-                            <span class="fw-bold">{{ dashboardData.content.us_jp_spread.us }}%</span>
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <span class="text-muted">🇯🇵 日債 10Y</span>
-                            <span class="fw-bold">{{ dashboardData.content.us_jp_spread.jp }}%</span>
-                        </div>
-                        <hr>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="fw-bold fs-5">利差 (Spread)</span>
-                            <span :class="['fs-4', 'status-' + dashboardData.content.us_jp_spread.status]">{{ dashboardData.content.us_jp_spread.spread }}%</span>
-                        </div>
-                        <div v-if="dashboardData.content.us_jp_spread.spread < 2.0" class="alert alert-danger mt-3 mb-0 py-2 text-center fw-bold">
-                            ⚠️ 警告：利差跌破 2%
+            
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card text-center p-4 bg-white shadow-sm">
+                        <h5 class="text-muted mb-3 text-uppercase ls-1">Mark 17 總經風險評分</h5>
+                        <div class="d-flex justify-content-center align-items-center gap-4 flex-wrap">
+                            <div class="d-flex align-items-baseline">
+                                <span class="display-3 fw-bold text-dark">{{ dashboardData.content.total_score }}</span>
+                                <span class="text-muted fs-4 ms-2">/ 15</span>
+                            </div>
+                            <div :class="['advice-badge', 'advice-' + dashboardData.content.advice]">策略建議: {{ dashboardData.content.advice }}</div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="col-lg-4 col-md-12 mb-4">
-                <div class="card h-100">
-                    <div class="card-header bg-warning text-dark fw-bold d-flex justify-content-between align-items-center">
-                        <span>🥇 貴金屬重挫偵測</span>
-                        <small>跌幅 > 50%</small>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-striped mb-0 align-middle text-center" style="font-size: 0.9rem;">
-                                <thead class="table-light">
-                                    <tr><th>商品</th><th>現價</th><th>跌幅</th><th>狀態</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="metal in dashboardData.content.metals" :key="metal.name">
-                                        <td class="fw-bold">{{ metal.name }}</td>
-                                        <td>{{ Math.round(metal.current) }}</td>
-                                        <td class="text-muted">{{ metal.drop ? metal.drop.toFixed(1) : 0 }}%</td>
-                                        <td :class="'status-' + metal.status">{{ metal.status === 'Danger' ? '⚠️' : 'OK' }}</td>
-                                    </tr>
-                                    <tr v-if="!dashboardData.content.metals?.length"><td colspan="4" class="text-muted py-3">暫無數據</td></tr>
-                                </tbody>
-                            </table>
+                <div class="col-lg-4 col-md-12 mb-4" v-if="dashboardData.content.us_jp_spread">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                            <span>📉 美日債券利差</span>
+                            <small class="opacity-75">門檻: 2.0%</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-muted">🇺🇸 美債 10Y</span>
+                                <span class="fw-bold">{{ dashboardData.content.us_jp_spread.us }}%</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-muted">🇯🇵 日債 10Y</span>
+                                <span class="fw-bold">{{ dashboardData.content.us_jp_spread.jp }}%</span>
+                            </div>
+                            <hr>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold fs-5">利差 (Spread)</span>
+                                <span :class="['fs-4', 'status-' + dashboardData.content.us_jp_spread.status]">{{ dashboardData.content.us_jp_spread.spread }}%</span>
+                            </div>
+                            <div v-if="dashboardData.content.us_jp_spread.spread < 2.0" class="alert alert-danger mt-3 mb-0 py-2 text-center fw-bold">
+                                ⚠️ 警告：利差跌破 2%
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="col-lg-4 col-md-12 mb-4">
-                <div class="card h-100">
-                    <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center bg-gradient">
-                        <span>💱 關鍵匯率監控</span>
-                        <small>半年位階</small>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0 align-middle text-center" style="font-size: 0.9rem;">
-                                <thead class="table-light">
-                                    <tr><th>貨幣</th><th>現價</th><th>距高點</th><th>距低點</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="curr in dashboardData.content.currencies" :key="curr.name">
-                                        <td class="fw-bold text-start ps-3">{{ curr.name }}</td>
-                                        <td class="fw-bold">{{ curr.current }}</td>
-                                        <td :class="curr.diff_high < -5 ? 'text-success fw-bold' : 'text-muted'">{{ curr.diff_high }}%</td>
-                                        <td :class="curr.diff_low > 5 ? 'text-danger fw-bold' : 'text-muted'">{{ curr.diff_low }}%</td>
-                                    </tr>
-                                    <tr v-if="!dashboardData.content.currencies?.length"><td colspan="4" class="text-muted py-3">暫無匯率數據</td></tr>
-                                </tbody>
-                            </table>
+                <div class="col-lg-4 col-md-12 mb-4">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-header bg-warning text-dark fw-bold d-flex justify-content-between align-items-center">
+                            <span>🥇 貴金屬重挫偵測</span>
+                            <small>跌幅 > 50%</small>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-striped mb-0 align-middle text-center" style="font-size: 0.9rem;">
+                                    <thead class="table-light">
+                                        <tr><th>商品</th><th>現價</th><th>跌幅</th><th>狀態</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="metal in dashboardData.content.metals" :key="metal.name">
+                                            <td class="fw-bold">{{ metal.name }}</td>
+                                            <td>{{ Math.round(metal.current) }}</td>
+                                            <td class="text-muted">{{ metal.drop ? metal.drop.toFixed(1) : 0 }}%</td>
+                                            <td :class="'status-' + metal.status">{{ metal.status === 'Danger' ? '⚠️' : 'OK' }}</td>
+                                        </tr>
+                                        <tr v-if="!dashboardData.content.metals?.length"><td colspan="4" class="text-muted py-3">暫無數據</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div v-if="dashboardData.content.raw_indicators" class="row mt-2">
+                <div class="col-lg-4 col-md-12 mb-4">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center bg-gradient">
+                            <span>💱 關鍵匯率監控</span>
+                            <small>半年位階</small>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0 align-middle text-center" style="font-size: 0.9rem;">
+                                    <thead class="table-light">
+                                        <tr><th>貨幣</th><th>現價</th><th>距高點</th><th>距低點</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="curr in dashboardData.content.currencies" :key="curr.name">
+                                            <td class="fw-bold text-start ps-3">{{ curr.name }}</td>
+                                            <td class="fw-bold">{{ curr.current }}</td>
+                                            <td :class="curr.diff_high < -5 ? 'text-success fw-bold' : 'text-muted'">{{ curr.diff_high }}%</td>
+                                            <td :class="curr.diff_low > 5 ? 'text-danger fw-bold' : 'text-muted'">{{ curr.diff_low }}%</td>
+                                        </tr>
+                                        <tr v-if="!dashboardData.content.currencies?.length"><td colspan="4" class="text-muted py-3">暫無匯率數據</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> <div v-if="dashboardData.content.raw_indicators" class="row mt-2">
                 <div class="col-12"><h4 class="mb-3 border-start border-5 border-primary ps-3 fw-bold">📑 整體經濟指標細項</h4></div>
                 
                 <div class="col-12 mb-3">
-                    <div class="card section-bar-tw">
+                    <div class="card section-bar-tw shadow-sm">
                         <div class="card-header bg-light">📌 核心概況 & 時間</div>
                         <div class="card-body">
                             <div class="row g-3">
@@ -188,7 +189,7 @@
                 </div>
 
                 <div class="col-md-6 mb-3">
-                    <div class="card section-bar-tw">
+                    <div class="card section-bar-tw shadow-sm h-100">
                         <div class="card-header bg-light">💰 台灣資金與股市</div>
                         <div class="card-body">
                             <div class="row g-3">
@@ -202,7 +203,7 @@
                 </div>
 
                 <div class="col-md-6 mb-3">
-                    <div class="card section-bar-us">
+                    <div class="card section-bar-us shadow-sm h-100">
                         <div class="card-header bg-light">📉 美國債市與利率</div>
                         <div class="card-body">
                             <div class="row g-3">
@@ -216,7 +217,7 @@
                 </div>
 
                 <div class="col-md-6 mb-3">
-                    <div class="card section-bar-cycle">
+                    <div class="card section-bar-cycle shadow-sm h-100">
                         <div class="card-header bg-light">🏭 景氣循環與製造業</div>
                         <div class="card-body">
                             <div class="row g-3">
@@ -229,7 +230,7 @@
                 </div>
 
                 <div class="col-md-6 mb-3">
-                    <div class="card section-bar-sentiment">
+                    <div class="card section-bar-sentiment shadow-sm h-100">
                         <div class="card-header bg-light">🛍️ 消費信心與訂單</div>
                         <div class="card-body">
                             <div class="row g-3">
@@ -244,14 +245,14 @@
 
             <div class="row mt-2" v-if="dashboardData.content.global_markets?.length">
                 <div class="col-12">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-header bg-secondary text-white fw-bold d-flex justify-content-between align-items-center">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-secondary text-white fw-bold d-flex justify-content-between align-items-center flex-wrap">
                             <span>🌍 全球主要股市位階偵測 (乖離率監控)</span>
-                            <small>負值代表回檔幅度，正值代表反彈幅度</small>
+                            <small class="mt-1 mt-md-0">負值代表回檔幅度，正值代表反彈幅度</small>
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive">
-                                <table class="table table-hover table-bordered mb-0 align-middle text-center" style="font-size: 0.85rem;">
+                                <table class="table table-hover table-bordered mb-0 align-middle text-center" style="font-size: 0.85rem; min-width: 800px;">
                                     <thead class="table-light">
                                         <tr>
                                             <th rowspan="2" class="align-middle">指數名稱</th>
@@ -290,8 +291,8 @@
 
             <div class="row mt-4">
                 <div class="col-12">
-                    <div class="card">
-                        <div class="card-header bg-light text-dark fw-bold d-flex justify-content-between" data-bs-toggle="collapse" href="#mark17Details" role="button" aria-expanded="true">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-light text-dark fw-bold d-flex justify-content-between cursor-pointer" data-bs-toggle="collapse" href="#mark17Details" role="button" aria-expanded="true">
                             <span>📋 Mark 17 詳細計分表</span>
                             <small>▼ 點擊展開/收合</small>
                         </div>
@@ -323,6 +324,7 @@
                 </div>
             </div>
         </div>
+        
         <div v-else class="text-center mt-5">
             <div class="spinner-border text-primary" role="status" v-if="isLoading"></div>
             <p class="mt-2 text-muted fw-bold" v-if="isLoading">載入最新戰情數據中...</p>
@@ -432,7 +434,7 @@
               <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
                 <h5 class="fw-bold text-secondary mb-0">台股加權指數 (^TWII) 多週期分析</h5>
                 
-                <div class="btn-group shadow-sm" role="group">
+                <div class="btn-group shadow-sm mt-2 mt-md-0" role="group">
                   <input type="radio" class="btn-check" name="period" id="btn-daily" value="daily" v-model="currentPeriod" @change="renderEChart">
                   <label class="btn btn-outline-primary fw-bold px-4" for="btn-daily">日 K</label>
 
@@ -444,7 +446,7 @@
                 </div>
               </div>
               
-              <div id="taiexChart" style="width: 100%; height: 800px;"></div>
+              <div id="taiexChart" style="width: 100%; height: 80vh; min-height: 600px;"></div>
             </div>
           </div>
 
@@ -461,7 +463,7 @@ import { useHead } from '#imports'
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
 
 // =====================================
-// 1. 總經看板變數與資料抓取 (🔥 已完全恢復)
+// 1. 總經看板變數與資料抓取
 // =====================================
 const rawResponseData = ref(null)
 const isLoading = ref(true)
@@ -485,14 +487,13 @@ const fetchDashboardData = async () => {
   } catch (error) {
     console.error("無法取得總經資料:", error)
   } finally {
-    isLoading.value = false // 確保轉圈圈一定會停下來
+    isLoading.value = false 
   }
 }
-// 執行抓取
 await fetchDashboardData()
 
 // =====================================
-// 2. 爬蟲同步與上傳邏輯 (🔥 已完全恢復)
+// 2. 爬蟲同步與上傳邏輯
 // =====================================
 const isSyncing = ref(false)
 const triggerSync = async () => {
@@ -575,7 +576,7 @@ const uploadToServer = async () => {
 }
 
 // =====================================
-// 3. 台股 K 線、KD 極值與預測邏輯 (保留強力數據淨化)
+// 3. 台股 K 線、KD 極值與預測邏輯 
 // =====================================
 const isChartLoading = ref(false)
 const taiexAnalysis = ref(null)
