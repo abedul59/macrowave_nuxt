@@ -7,22 +7,18 @@
 
     <div class="container mb-4">
       <ul class="nav nav-tabs nav-fill fw-bold fs-5 shadow-sm bg-white rounded-top" id="myTab" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link active py-3" id="macro-tab" data-bs-toggle="tab" data-bs-target="#macro" type="button" role="tab" aria-controls="macro" aria-selected="true">
-            🌍 總經戰情儀表板
-          </button>
+        <li class="nav-item">
+          <button class="nav-link active py-3" data-bs-toggle="tab" data-bs-target="#macro" type="button">🌍 總經戰情儀表板</button>
         </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link py-3" id="taiex-tab" data-bs-toggle="tab" data-bs-target="#taiex" type="button" role="tab" aria-controls="taiex" aria-selected="false" @click="initTaiexChart">
-            📈 台股多週期與均線分析
-          </button>
+        <li class="nav-item">
+          <button class="nav-link py-3" data-bs-toggle="tab" data-bs-target="#taiex" type="button" @click="initTaiexChart">📈 台股多週期與均線分析</button>
         </li>
       </ul>
     </div>
 
     <div class="tab-content" id="myTabContent">
       
-      <div class="tab-pane fade show active" id="macro" role="tabpanel" aria-labelledby="macro-tab">
+      <div class="tab-pane fade show active" id="macro" role="tabpanel">
         <div class="container mb-4">
             <div class="card shadow-sm">
                 <div class="card-body">
@@ -56,14 +52,29 @@
                     </div>
                     
                     <hr class="my-4 text-muted">
-                    <div class="row align-items-center">
-                        <div class="col-md-4 text-md-end mb-2 mb-md-0"><span class="fw-bold text-secondary">🔗 外部系統聯動：</span></div>
+                    
+                    <div class="row align-items-center g-3">
+                        <div class="col-md-3 text-md-end">
+                            <span class="fw-bold text-secondary">🔗 外部系統聯動：</span>
+                        </div>
                         <div class="col-md-4">
                             <button class="btn btn-dark w-100 fw-bold shadow-sm" type="button" @click="triggerTwstockSync" :disabled="isSyncingTwstock">
                                 {{ isSyncingTwstock ? 'Twstock168 更新中...' : '🚀 獨立更新 Twstock168' }}
                             </button>
                         </div>
+                        <div class="col-md-5">
+                            <a href="https://www.macromicro.me/collections/46/tw-stock-relative/110457/tw-tmf-long-to-short-ratio-of-individual-player?utm_source=facebook&utm_medium=social-network&utm_content=post&utm_campaign=" 
+                               target="_blank" rel="noopener noreferrer" 
+                               class="btn btn-danger w-100 fw-bold shadow-sm d-flex justify-content-center align-items-center gap-2">
+                               🔥 微台散戶多空比 (財經M平方)
+                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box-arrow-up-right" viewBox="0 0 16 16">
+                                 <path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/>
+                                 <path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>
+                               </svg>
+                            </a>
+                        </div>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -108,21 +119,15 @@
                   <div class="bg-light p-3 rounded border border-warning mb-3">
                     <div class="fw-bold text-dark mb-2 border-bottom border-warning pb-1">🎯 季線 (60MA) 扣抵值預測</div>
                     <div class="d-flex justify-content-between text-muted small mb-1">
-                      <span>明日扣抵目標日</span>
-                      <span>{{ taiexAnalysis.daily.deduction60.date }}</span>
+                      <span>明日扣抵目標日</span><span>{{ taiexAnalysis.daily.deduction60.date }}</span>
                     </div>
                     <div class="d-flex justify-content-between mb-1">
-                      <span>明日均線防守價</span>
-                      <span class="fw-bold fs-5 text-dark">{{ taiexAnalysis.daily.deduction60.price.toFixed(2) }}</span>
+                      <span>明日均線防守價</span><span class="fw-bold fs-5 text-dark">{{ taiexAnalysis.daily.deduction60.price.toFixed(2) }}</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mt-2">
                       <span class="text-secondary small">多空翻轉判定：</span>
-                      <span v-if="taiexAnalysis.daily.deduction60.isSafe" class="badge bg-success fs-6">
-                        緩衝空間 +{{ taiexAnalysis.daily.deduction60.diff.toFixed(0) }} 點 (季線看漲)
-                      </span>
-                      <span v-else class="badge bg-danger fs-6">
-                        差 {{ Math.abs(taiexAnalysis.daily.deduction60.diff).toFixed(0) }} 點 (面臨下彎)
-                      </span>
+                      <span v-if="taiexAnalysis.daily.deduction60.isSafe" class="badge bg-success fs-6">緩衝空間 +{{ taiexAnalysis.daily.deduction60.diff.toFixed(0) }} 點 (看漲)</span>
+                      <span v-else class="badge bg-danger fs-6">差 {{ Math.abs(taiexAnalysis.daily.deduction60.diff).toFixed(0) }} 點 (面臨下彎)</span>
                     </div>
                   </div>
 
@@ -153,21 +158,15 @@
                   <div class="bg-light p-3 rounded border border-primary mb-3">
                     <div class="fw-bold text-dark mb-2 border-bottom border-primary pb-1">🎯 月線 (20MA) 扣抵值預測</div>
                     <div class="d-flex justify-content-between text-muted small mb-1">
-                      <span>明日扣抵目標日</span>
-                      <span>{{ taiexAnalysis.daily.deduction20.date }}</span>
+                      <span>明日扣抵目標日</span><span>{{ taiexAnalysis.daily.deduction20.date }}</span>
                     </div>
                     <div class="d-flex justify-content-between mb-1">
-                      <span>明日均線防守價</span>
-                      <span class="fw-bold fs-5 text-dark">{{ taiexAnalysis.daily.deduction20.price.toFixed(2) }}</span>
+                      <span>明日均線防守價</span><span class="fw-bold fs-5 text-dark">{{ taiexAnalysis.daily.deduction20.price.toFixed(2) }}</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mt-2">
                       <span class="text-secondary small">多空翻轉判定：</span>
-                      <span v-if="taiexAnalysis.daily.deduction20.isSafe" class="badge bg-success fs-6">
-                        緩衝空間 +{{ taiexAnalysis.daily.deduction20.diff.toFixed(0) }} 點 (月線看漲)
-                      </span>
-                      <span v-else class="badge bg-danger fs-6">
-                        差 {{ Math.abs(taiexAnalysis.daily.deduction20.diff).toFixed(0) }} 點 (面臨下彎)
-                      </span>
+                      <span v-if="taiexAnalysis.daily.deduction20.isSafe" class="badge bg-success fs-6">緩衝空間 +{{ taiexAnalysis.daily.deduction20.diff.toFixed(0) }} 點 (看漲)</span>
+                      <span v-else class="badge bg-danger fs-6">差 {{ Math.abs(taiexAnalysis.daily.deduction20.diff).toFixed(0) }} 點 (面臨下彎)</span>
                     </div>
                   </div>
 
@@ -218,24 +217,21 @@ import { useHead } from '#imports'
 
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
 
-// === 總經看板變數與邏輯 ===
 const rawResponseData = ref(null)
 const isLoading = ref(true)
 const dashboardData = computed(() => rawResponseData.value)
 
-// 爬蟲同步與上傳邏輯
 const isSyncing = ref(false)
-const triggerSync = async () => { /* 依原本 HF 同步邏輯 */ }
+const triggerSync = async () => { /* 保留原本 HF 同步邏輯 */ }
 const isSyncingTwstock = ref(false)
-const triggerTwstockSync = async () => { /* 依原本邏輯 */ }
+const triggerTwstockSync = async () => { /* 保留原本邏輯 */ }
 const selectedFile = ref(null)
 const isUploading = ref(false)
 const handleFileSelect = (event) => selectedFile.value = event.target.files[0]
-const uploadToServer = async () => { /* 依原本邏輯 */ }
-
+const uploadToServer = async () => { /* 保留原本邏輯 */ }
 
 // =====================================
-// 台股 K 線、KD 極值與「成交量、均線扣抵」預測邏輯
+// 台股 K 線、KD 極值與預測邏輯
 // =====================================
 const isChartLoading = ref(false)
 const taiexAnalysis = ref(null)
@@ -243,7 +239,6 @@ const taiexAllData = ref(null)
 const currentPeriod = ref('daily') 
 let chartInstance = null
 
-// 計算 KD 值
 function calculateKD(quotes, period = 9) {
   let k = 50, d = 50;
   return quotes.map((q, i, arr) => {
@@ -258,7 +253,6 @@ function calculateKD(quotes, period = 9) {
   })
 }
 
-// 計算均線
 function calculateMA(dayCount, quotes) {
   let result = [];
   for (let i = 0; i < quotes.length; i++) {
@@ -306,19 +300,11 @@ async function initTaiexChart() {
     const ma20Trend = latestMA20 > ma20Data[ma20Data.length - 2] ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>'
     const ma60Trend = latestMA60 > ma60Data[ma60Data.length - 2] ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>'
 
-    // 扣抵值計算
     const d20_index = dailyData.length - 20
-    const deduction20 = {
-      date: dailyData[d20_index].date, price: dailyData[d20_index].close,
-      diff: latestClose - dailyData[d20_index].close, isSafe: latestClose >= dailyData[d20_index].close
-    }
+    const deduction20 = { date: dailyData[d20_index].date, price: dailyData[d20_index].close, diff: latestClose - dailyData[d20_index].close, isSafe: latestClose >= dailyData[d20_index].close }
     const d60_index = dailyData.length - 60
-    const deduction60 = {
-      date: dailyData[d60_index].date, price: dailyData[d60_index].close,
-      diff: latestClose - dailyData[d60_index].close, isSafe: latestClose >= dailyData[d60_index].close
-    }
+    const deduction60 = { date: dailyData[d60_index].date, price: dailyData[d60_index].close, diff: latestClose - dailyData[d60_index].close, isSafe: latestClose >= dailyData[d60_index].close }
 
-    // 極值分析
     const lastWeeklyWave = findLastGoldenCrossWave(weeklyKD)
     let weeklyAnalysis = '', weeklyAlert = '', wAlertClass = ''
     if (lastWeeklyWave) {
@@ -351,7 +337,6 @@ async function initTaiexChart() {
   } catch (error) { alert('無法取得台股資料：' + error.message) } finally { isChartLoading.value = false }
 }
 
-// 渲染 ECharts 包含【K線、成交量、KD】三圖層聯動
 function renderEChart() {
   if (!taiexAllData.value) return;
   const targetData = taiexAllData.value[currentPeriod.value]
@@ -363,16 +348,14 @@ function renderEChart() {
   const kData = targetData.map(item => item.k)
   const dData = targetData.map(item => item.d)
 
-  // 🔥 建立成交量資料 (紅綠K判斷決定柱狀圖顏色)
   const volumeData = targetData.map((item, index) => ({
     value: item.volume,
-    itemStyle: { color: item.close >= item.open ? '#dc3545' : '#198754' } // 紅K成交量紅色，綠K成交量綠色
+    itemStyle: { color: item.close >= item.open ? '#dc3545' : '#198754' }
   }))
 
   const kdMarks = []
   for (let i = 1; i < targetData.length; i++) {
-    const prev = targetData[i - 1]
-    const curr = targetData[i]
+    const prev = targetData[i - 1]; const curr = targetData[i]
     if (prev.k === null || curr.k === null) continue;
     if (prev.k <= prev.d && curr.k > curr.d) { kdMarks.push({ coord: [i, curr.k], symbol: 'arrow', symbolSize: 12, itemStyle: { color: '#dc3545' }, value: '金叉' }) }
     if (prev.k >= prev.d && curr.k < curr.d) { kdMarks.push({ coord: [i, curr.k], symbol: 'arrow', symbolRotate: 180, symbolSize: 12, itemStyle: { color: '#198754' }, value: '死叉' }) }
@@ -380,8 +363,7 @@ function renderEChart() {
 
   const candleMarks = []
   if (currentPeriod.value === 'daily' && targetData.length >= 60) {
-    const d20_idx = targetData.length - 20
-    const d60_idx = targetData.length - 60
+    const d20_idx = targetData.length - 20; const d60_idx = targetData.length - 60
     candleMarks.push({ coord: [d20_idx, candleValues[d20_idx][1]], value: '20MA扣抵', symbol: 'pin', symbolSize: 40, itemStyle: { color: '#0dcaf0' }})
     candleMarks.push({ coord: [d60_idx, candleValues[d60_idx][1]], value: '60MA扣抵', symbol: 'pin', symbolSize: 40, itemStyle: { color: '#ffc107' }})
   }
@@ -393,14 +375,12 @@ function renderEChart() {
     
     chartInstance.setOption({
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-      axisPointer: { link: [{ xAxisIndex: 'all' }] }, // 橫跨三張圖表同步 Hover
+      axisPointer: { link: [{ xAxisIndex: 'all' }] }, 
       legend: { data: ['K線', '20MA', '60MA', '成交量', 'K值', 'D值'] },
-      
-      // 🔥 三層 Grid 切割配置
       grid: [
-        { left: '8%', right: '5%', top: '5%', height: '50%' },   // Grid 0: 主圖 (K線 + 均線)
-        { left: '8%', right: '5%', top: '58%', height: '15%' },  // Grid 1: 中間 (成交量)
-        { left: '8%', right: '5%', top: '76%', height: '15%' }   // Grid 2: 底部 (KD 指標)
+        { left: '8%', right: '5%', top: '5%', height: '50%' },   
+        { left: '8%', right: '5%', top: '58%', height: '15%' },  
+        { left: '8%', right: '5%', top: '76%', height: '15%' }   
       ],
       xAxis: [
         { type: 'category', data: categoryData, gridIndex: 0, boundaryGap: true, axisLabel: { show: false } },
@@ -409,7 +389,7 @@ function renderEChart() {
       ],
       yAxis: [
         { scale: true, gridIndex: 0, splitArea: { show: true } },
-        { scale: true, gridIndex: 1, splitNumber: 2, axisLabel: { show: false }, splitLine: { show: false }, axisLine: { show: false }, axisTick: { show: false } }, // 隱藏成交量軸線避免擁擠
+        { scale: true, gridIndex: 1, splitNumber: 2, axisLabel: { show: false }, splitLine: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
         { min: 0, max: 100, gridIndex: 2, splitLine: { show: true, lineStyle: { type: 'dashed'} }, splitNumber: 2 }
       ],
       dataZoom: [
@@ -420,10 +400,7 @@ function renderEChart() {
         { name: 'K線', type: 'candlestick', data: candleValues, xAxisIndex: 0, yAxisIndex: 0, itemStyle: { color: '#dc3545', color0: '#198754', borderColor: '#dc3545', borderColor0: '#198754' }, markPoint: { data: candleMarks, label: { color: '#000', fontWeight: 'bold' } } },
         { name: '20MA', type: 'line', data: ma20Data, xAxisIndex: 0, yAxisIndex: 0, smooth: true, symbol: 'none', lineStyle: { color: '#0dcaf0' } },
         { name: '60MA', type: 'line', data: ma60Data, xAxisIndex: 0, yAxisIndex: 0, smooth: true, symbol: 'none', lineStyle: { color: '#ffc107' } },
-        
-        // 🔥 新增的成交量柱狀圖系列
         { name: '成交量', type: 'bar', data: volumeData, xAxisIndex: 1, yAxisIndex: 1 },
-        
         { name: 'K值', type: 'line', data: kData, xAxisIndex: 2, yAxisIndex: 2, smooth: true, symbol: 'none', lineStyle: { color: '#dc3545' }, markPoint: { data: kdMarks, label: { show: false } } },
         { name: 'D值', type: 'line', data: dData, xAxisIndex: 2, yAxisIndex: 2, smooth: true, symbol: 'none', lineStyle: { color: '#0d6efd' } }
       ]
@@ -433,5 +410,5 @@ function renderEChart() {
 </script>
 
 <style>
-/* 包含原本所有的 CSS 樣式 */
+/* ... 保留原先 CSS ... */
 </style>
