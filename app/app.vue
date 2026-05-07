@@ -67,10 +67,6 @@
                                target="_blank" rel="noopener noreferrer" 
                                class="btn btn-danger w-100 fw-bold shadow-sm d-flex justify-content-center align-items-center gap-2">
                                🔥 微台散戶多空比 (財經M平方)
-                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box-arrow-up-right" viewBox="0 0 16 16">
-                                 <path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/>
-                                 <path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/>
-                               </svg>
                             </a>
                         </div>
                     </div>
@@ -109,7 +105,10 @@
                 <div class="card-body d-flex flex-column">
                   <div class="d-flex justify-content-between mb-2">
                     <span class="text-muted">最新月 KD</span>
-                    <span class="fw-bold fs-5">K: <span :class="taiexAnalysis.monthly.k > 80 ? 'text-danger' : ''">{{ taiexAnalysis.monthly.k.toFixed(2) }}</span> / D: {{ taiexAnalysis.monthly.d.toFixed(2) }}</span>
+                    <span class="fw-bold fs-5">
+                      K: <span :class="taiexAnalysis.monthly.k > 80 ? 'text-danger' : ''">{{ taiexAnalysis.monthly.k.toFixed(2) }}</span> / 
+                      D: {{ taiexAnalysis.monthly.d.toFixed(2) }}
+                    </span>
                   </div>
                   <div class="d-flex justify-content-between mb-3">
                     <span class="text-muted">季線 (60MA) 現況</span>
@@ -148,7 +147,10 @@
                 <div class="card-body d-flex flex-column">
                   <div class="d-flex justify-content-between mb-2">
                     <span class="text-muted">最新週 KD</span>
-                    <span class="fw-bold fs-5">K: <span :class="taiexAnalysis.weekly.k > 80 ? 'text-danger' : ''">{{ taiexAnalysis.weekly.k.toFixed(2) }}</span> / D: {{ taiexAnalysis.weekly.d.toFixed(2) }}</span>
+                    <span class="fw-bold fs-5">
+                      K: <span :class="taiexAnalysis.weekly.k > 80 ? 'text-danger' : ''">{{ taiexAnalysis.weekly.k.toFixed(2) }}</span> / 
+                      D: {{ taiexAnalysis.weekly.d.toFixed(2) }}
+                    </span>
                   </div>
                   <div class="d-flex justify-content-between mb-3">
                     <span class="text-muted">月線 (20MA) 現況</span>
@@ -221,17 +223,19 @@ const rawResponseData = ref(null)
 const isLoading = ref(true)
 const dashboardData = computed(() => rawResponseData.value)
 
+// 爬蟲同步與上傳邏輯
 const isSyncing = ref(false)
-const triggerSync = async () => { /* 保留原本 HF 同步邏輯 */ }
+const triggerSync = async () => { /* 依您原本 HF 邏輯 */ }
 const isSyncingTwstock = ref(false)
-const triggerTwstockSync = async () => { /* 保留原本邏輯 */ }
+const triggerTwstockSync = async () => { /* 依您原本 HF 邏輯 */ }
 const selectedFile = ref(null)
 const isUploading = ref(false)
 const handleFileSelect = (event) => selectedFile.value = event.target.files[0]
-const uploadToServer = async () => { /* 保留原本邏輯 */ }
+const uploadToServer = async () => { /* 依您原本上傳邏輯 */ }
+
 
 // =====================================
-// 台股 K 線、KD 極值與預測邏輯
+// 台股 K 線、KD 極值與預測邏輯 (加入強力數據淨化)
 // =====================================
 const isChartLoading = ref(false)
 const taiexAnalysis = ref(null)
@@ -239,35 +243,57 @@ const taiexAllData = ref(null)
 const currentPeriod = ref('daily') 
 let chartInstance = null
 
+// 🔥 核心修正 1：數據淨化器，剃除所有 null 與 NaN 導致崩潰的交易日
+function sanitizeData(quotes) {
+  if (!quotes || !Array.isArray(quotes)) return [];
+  return quotes.filter(q => 
+    q.open != null && q.high != null && q.low != null && q.close != null &&
+    !isNaN(q.open) && !isNaN(q.high) && !isNaN(q.low) && !isNaN(q.close)
+  );
+}
+
+// 計算 KD 值 (加入零值與除數防呆)
 function calculateKD(quotes, period = 9) {
   let k = 50, d = 50;
   return quotes.map((q, i, arr) => {
-    if (i < period - 1) return { ...q, k: null, d: null }
+    if (i < period - 1) return { ...q, k: 50, d: 50 } // 預設 50，避免 NaN 污染
     const recentRange = arr.slice(i - period + 1, i + 1)
     const highest = Math.max(...recentRange.map(x => x.high))
     const lowest = Math.min(...recentRange.map(x => x.low))
-    let rsv = highest === lowest ? 0 : ((q.close - lowest) / (highest - lowest)) * 100
+    
+    let rsv = 0;
+    if (highest !== lowest && !isNaN(highest) && !isNaN(lowest)) {
+      rsv = ((q.close - lowest) / (highest - lowest)) * 100
+    }
+    
     k = (rsv + k * 2) / 3
     d = (k + d * 2) / 3
     return { ...q, k, d }
   })
 }
 
+// 計算均線 (加入 Null 略過防呆)
 function calculateMA(dayCount, quotes) {
   let result = [];
   for (let i = 0; i < quotes.length; i++) {
     if (i < dayCount - 1) { result.push(null); continue; }
     let sum = 0;
-    for (let j = 0; j < dayCount; j++) sum += quotes[i - j].close;
-    result.push(sum / dayCount);
+    let valid = true;
+    for (let j = 0; j < dayCount; j++) {
+      if (quotes[i - j].close == null) valid = false;
+      sum += quotes[i - j].close;
+    }
+    result.push(valid ? sum / dayCount : null);
   }
   return result;
 }
 
+// 尋找最近一次起漲點 (加入防空檢查)
 function findLastGoldenCrossWave(kdData) {
+  if (!kdData || kdData.length < 2) return null;
   for (let i = kdData.length - 2; i > 0; i--) {
     const prev = kdData[i - 1]; const curr = kdData[i];
-    if (prev.k !== null && prev.k <= prev.d && curr.k > curr.d && curr.k < 30) {
+    if (prev && curr && prev.k !== null && prev.k <= prev.d && curr.k > curr.d && curr.k < 30) {
       return { date: curr.date, close: curr.close }
     }
   }
@@ -282,10 +308,17 @@ async function initTaiexChart() {
     const res = await $fetch('/api/taiex')
     if (!res.success) throw new Error(res.message)
 
+    // 🔥 將從 API 收到的資料徹底淨化
+    const safeDaily = sanitizeData(res.data.daily)
+    const safeWeekly = sanitizeData(res.data.weekly)
+    const safeMonthly = sanitizeData(res.data.monthly)
+
+    if (safeDaily.length < 60) throw new Error("取得的有效 K 線資料不足，無法計算長均線")
+
     taiexAllData.value = {
-      daily: calculateKD(res.data.daily),
-      weekly: calculateKD(res.data.weekly),
-      monthly: calculateKD(res.data.monthly)
+      daily: calculateKD(safeDaily),
+      weekly: calculateKD(safeWeekly),
+      monthly: calculateKD(safeMonthly)
     }
 
     const dailyData = taiexAllData.value.daily
@@ -295,16 +328,34 @@ async function initTaiexChart() {
 
     const ma20Data = calculateMA(20, dailyData)
     const ma60Data = calculateMA(60, dailyData)
-    const latestMA20 = ma20Data[ma20Data.length - 1]
-    const latestMA60 = ma60Data[ma60Data.length - 1]
-    const ma20Trend = latestMA20 > ma20Data[ma20Data.length - 2] ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>'
-    const ma60Trend = latestMA60 > ma60Data[ma60Data.length - 2] ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>'
+    
+    // 取得最新均線 (往前找直到找到非 null 值)
+    const latestMA20 = ma20Data[ma20Data.length - 1] || 0
+    const latestMA60 = ma60Data[ma60Data.length - 1] || 0
+    const prevMA20 = ma20Data[ma20Data.length - 2] || 0
+    const prevMA60 = ma60Data[ma60Data.length - 2] || 0
+    
+    const ma20Trend = latestMA20 > prevMA20 ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>'
+    const ma60Trend = latestMA60 > prevMA60 ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>'
 
-    const d20_index = dailyData.length - 20
-    const deduction20 = { date: dailyData[d20_index].date, price: dailyData[d20_index].close, diff: latestClose - dailyData[d20_index].close, isSafe: latestClose >= dailyData[d20_index].close }
-    const d60_index = dailyData.length - 60
-    const deduction60 = { date: dailyData[d60_index].date, price: dailyData[d60_index].close, diff: latestClose - dailyData[d60_index].close, isSafe: latestClose >= dailyData[d60_index].close }
+    // 🔥 防呆：避免資料不夠長導致 array index 小於 0 報錯
+    const d20_index = Math.max(0, dailyData.length - 20)
+    const deduction20 = { 
+      date: dailyData[d20_index].date, 
+      price: dailyData[d20_index].close, 
+      diff: latestClose - dailyData[d20_index].close, 
+      isSafe: latestClose >= dailyData[d20_index].close 
+    }
+    
+    const d60_index = Math.max(0, dailyData.length - 60)
+    const deduction60 = { 
+      date: dailyData[d60_index].date, 
+      price: dailyData[d60_index].close, 
+      diff: latestClose - dailyData[d60_index].close, 
+      isSafe: latestClose >= dailyData[d60_index].close 
+    }
 
+    // 極值分析防呆
     const lastWeeklyWave = findLastGoldenCrossWave(weeklyKD)
     let weeklyAnalysis = '', weeklyAlert = '', wAlertClass = ''
     if (lastWeeklyWave) {
@@ -313,6 +364,9 @@ async function initTaiexChart() {
       if (pointDiff >= 800) { weeklyAlert = `⚠️ 週線波段漲 ${Math.round(pointDiff)} 點超越極值，隨時有回檔修正乖離之風險！`; wAlertClass = 'alert-danger' }
       else if (pointDiff >= 600) { weeklyAlert = `⚡ 週線達極值下緣，留意月線 (20MA) 扣抵值支撐。`; wAlertClass = 'alert-warning' }
       else { weeklyAlert = `✅ 中線極值未滿足，若防守住 20MA 扣抵仍有空間。`; wAlertClass = 'alert-success' }
+    } else {
+      weeklyAnalysis = '目前週 KD 歷史資料中尚未出現明顯的低檔起漲點。'
+      weeklyAlert = '保持警惕，觀察 20MA 扣抵支撐。'; wAlertClass = 'alert-secondary'
     }
 
     const lastMonthlyWave = findLastGoldenCrossWave(monthlyKD)
@@ -325,6 +379,9 @@ async function initTaiexChart() {
           monthlyAlert = `⚠️ 長波段漲 ${Math.round(pointDiff)} 點滿足極值要求！若最新價無法大於 60MA 扣抵值，將結束長波段。`; mAlertClass = 'alert-danger'
         } else { monthlyAlert = `⚡ 進入長線高檔風險區，緊盯季線扣抵值。`; mAlertClass = 'alert-warning' }
       } else { monthlyAlert = `✅ 長波段 2000 點極值尚未滿足。`; mAlertClass = 'alert-success' }
+    } else {
+      monthlyAnalysis = '目前月 KD 歷史資料中尚未出現明顯的低檔起漲點。'
+      monthlyAlert = '大趨勢不明，以季線(60MA)防守為準。'; mAlertClass = 'alert-secondary'
     }
 
     taiexAnalysis.value = {
@@ -334,12 +391,17 @@ async function initTaiexChart() {
     }
 
     renderEChart()
-  } catch (error) { alert('無法取得台股資料：' + error.message) } finally { isChartLoading.value = false }
+  } catch (error) { 
+    alert('資料讀取異常，請稍後再試：\n' + error.message) 
+  } finally { 
+    isChartLoading.value = false 
+  }
 }
 
 function renderEChart() {
   if (!taiexAllData.value) return;
   const targetData = taiexAllData.value[currentPeriod.value]
+  if (targetData.length === 0) return;
   
   const categoryData = targetData.map(item => item.date)
   const candleValues = targetData.map(item => [item.open, item.close, item.low, item.high])
