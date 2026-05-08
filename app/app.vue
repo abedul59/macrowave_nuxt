@@ -27,29 +27,36 @@
 
     <div class="tab-content">
       <KeepAlive>
-        <TabDashboard v-if="activeTab === 'macro'" />
-      </KeepAlive>
-      
-      <KeepAlive>
-        <TabTaiexTraditional v-if="activeTab === 'taiex'" />
-      </KeepAlive>
-      
-      <KeepAlive>
-        <TabTaiexDynamic v-if="activeTab === 'dynamic'" />
+        <component :is="currentTabComponent" />
       </KeepAlive>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useHead } from '#imports'
+
+// 🔥 核心修復：強制手動匯入三個分頁檔案，徹底避開 Nuxt 找不到檔案的問題
+import TabDashboard from '../components/TabDashboard.vue'
+import TabTaiexTraditional from '../components/TabTaiexTraditional.vue'
+import TabTaiexDynamic from '../components/TabTaiexDynamic.vue'
 
 // 全局引入 ECharts 套件
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
 
-// 控制目前顯示的分頁
+// 控制目前顯示的分頁 (預設顯示總經儀表板)
 const activeTab = ref('macro')
+
+// 根據點擊的分頁，動態回傳對應的組件
+const currentTabComponent = computed(() => {
+  switch (activeTab.value) {
+    case 'macro': return TabDashboard
+    case 'taiex': return TabTaiexTraditional
+    case 'dynamic': return TabTaiexDynamic
+    default: return TabDashboard
+  }
+})
 </script>
 
 <style>
