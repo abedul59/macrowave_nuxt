@@ -15,7 +15,7 @@
         </li>
         <li class="nav-item">
           <button class="nav-link py-3 text-primary" data-bs-toggle="tab" data-bs-target="#taiex-dynamic" type="button" @click="initTaiexDynamicChart">
-            🚀 台股分析 (動態極值)
+            🚀 台股分析 (動態極值強化版)
           </button>
         </li>
       </ul>
@@ -42,16 +42,8 @@
                             <button class="btn btn-outline-success w-100 fw-bold" data-bs-toggle="collapse" data-bs-target="#uploadBox">📤 手動上傳 JSON</button>
                         </div>
                     </div>
-                    <div class="collapse mt-3" id="uploadBox">
-                        <div class="card card-body bg-light border-0">
-                            <div class="d-flex gap-2 justify-content-center">
-                                <input type="file" @change="handleFileSelect" class="form-control w-75" accept=".json">
-                                <button @click="uploadToServer" class="btn btn-success fw-bold" :disabled="!selectedFile || isUploading">確認上傳</button>
-                            </div>
-                        </div>
-                    </div>
                     <hr class="my-4 text-muted">
-                    <div class="row align-items-center g-3">
+                    <div class="row align-items-center g-3 text-center">
                         <div class="col-md-3 text-md-end"><span class="fw-bold text-secondary">🔗 外部系統聯動：</span></div>
                         <div class="col-md-4">
                             <button class="btn btn-dark w-100 fw-bold shadow-sm" @click="triggerTwstockSync" :disabled="isSyncingTwstock">🚀 獨立更新 Twstock168</button>
@@ -91,12 +83,11 @@
                         <div class="card-header bg-warning text-dark fw-bold">🥇 貴金屬重挫偵測</div>
                         <div class="card-body p-0">
                             <table class="table table-striped mb-0 text-center">
-                                <thead class="table-light"><tr><th>商品</th><th>現價</th><th>跌幅</th><th>狀態</th></tr></thead>
+                                <thead class="table-light"><tr><th>商品</th><th>現價</th><th>跌幅</th></tr></thead>
                                 <tbody>
                                     <tr v-for="metal in dashboardData.content.metals" :key="metal.name">
                                         <td class="fw-bold">{{ metal.name }}</td><td>{{ Math.round(metal.current) }}</td>
                                         <td>{{ metal.drop ? metal.drop.toFixed(1) : 0 }}%</td>
-                                        <td :class="'status-' + metal.status">{{ metal.status === 'Danger' ? '⚠️' : 'OK' }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -108,7 +99,7 @@
                         <div class="card-header bg-primary text-white fw-bold">💱 關鍵匯率監控</div>
                         <div class="card-body p-0">
                             <table class="table table-hover mb-0 text-center">
-                                <thead class="table-light"><tr><th>貨幣</th><th>現價</th><th>距高點</th></tr></thead>
+                                <thead class="table-light"><tr><th>貨幣</th><th>現價</th><th>位階</th></tr></thead>
                                 <tbody>
                                     <tr v-for="curr in dashboardData.content.currencies" :key="curr.name">
                                         <td class="fw-bold text-start ps-3">{{ curr.name }}</td><td>{{ curr.current }}</td>
@@ -120,7 +111,8 @@
                     </div>
                 </div>
             </div>
-            </div>
+        </div>
+        <div v-else class="text-center mt-5"><div class="spinner-border text-primary" role="status" v-if="isLoading"></div></div>
       </div>
 
       <div class="tab-pane fade" id="taiex" role="tabpanel">
@@ -187,7 +179,6 @@
               </div>
             </div>
           </div>
-
           <div class="card shadow-sm mb-4" v-show="!isChartLoading && taiexAllData">
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-center mb-3">
@@ -205,36 +196,129 @@
       <div class="tab-pane fade" id="taiex-dynamic" role="tabpanel">
         <div class="container pb-5 mt-4">
           <div class="row mb-4" v-if="taiexAnalysisDynamic">
+            
             <div class="col-md-6 mb-3">
                 <div class="card h-100 border-danger shadow-sm">
-                    <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between"><span>🚀 長線動態極值 (25%)</span><span>基準: {{ taiexAnalysisDynamic.monthly.basePrice.toFixed(0) }}</span></div>
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between mb-2"><span class="text-muted">前次轉折</span><span>{{ taiexAnalysisDynamic.monthly.baseDate }}</span></div>
-                        <div class="d-flex justify-content-between mb-2"><span class="text-muted">目前點位變動</span><span class="fw-bold">{{ taiexAnalysisDynamic.monthly.currentDiff.toFixed(0) }} 點</span></div>
-                        <div class="d-flex justify-content-between mb-3"><span class="text-muted">換算百分比</span><span class="badge bg-primary fs-6">{{ taiexAnalysisDynamic.monthly.percentDiff.toFixed(1) }} %</span></div>
-                        <hr>
+                    <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between">
+                        <span>🚀 長線動態極值 (25%)</span>
+                        <span>最新: {{ taiexAnalysisDynamic.daily.current.toFixed(0) }}</span>
+                    </div>
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">最新月 KD</span>
+                            <span class="fw-bold fs-5">K: <span :class="taiexAnalysisDynamic.monthly.k > 80 ? 'text-danger' : ''">{{ taiexAnalysisDynamic.monthly.k.toFixed(2) }}</span> / D: {{ taiexAnalysisDynamic.monthly.d.toFixed(2) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-muted">季線 (60MA) 狀態</span>
+                            <span class="fw-bold fs-5">{{ taiexAnalysisDynamic.daily.ma60.toFixed(2) }} <span v-html="taiexAnalysisDynamic.daily.ma60_trend"></span></span>
+                        </div>
+
+                        <div class="bg-light p-3 rounded border border-danger mb-3">
+                            <div class="fw-bold text-danger mb-2 border-bottom border-danger pb-1">🎯 25% 動態週期追蹤</div>
+                            <div class="d-flex justify-content-between text-muted small mb-1">
+                                <span>轉折起點日期</span><span>{{ taiexAnalysisDynamic.monthly.baseDate }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted small mb-1">
+                                <span>轉折類型</span><span :class="taiexAnalysisDynamic.monthly.type === 'golden' ? 'text-danger fw-bold' : 'text-success fw-bold'">{{ taiexAnalysisDynamic.monthly.crossType }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>基準點位</span><span class="fw-bold">{{ taiexAnalysisDynamic.monthly.basePrice.toFixed(0) }} 點</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>動態極值目標</span><span class="fw-bold text-dark">{{ taiexAnalysisDynamic.monthly.targetPrice.toFixed(0) }} 點</span>
+                            </div>
+                            <div class="mt-2 pt-2 border-top">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="small fw-bold">波段推進進度：</span>
+                                    <span class="badge bg-danger fs-6">{{ taiexAnalysisDynamic.monthly.currentDiff.toFixed(0) }} 點 ({{ taiexAnalysisDynamic.monthly.percentDiff.toFixed(1) }}%)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-2 rounded border mb-3 small shadow-sm">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">季線(60MA) 防守價</span>
+                                <span class="fw-bold text-dark">{{ taiexAnalysisDynamic.daily.deduction60.price.toFixed(0) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-1">
+                                <span>防禦狀態</span>
+                                <span v-if="taiexAnalysisDynamic.daily.deduction60.isSafe" class="text-success fw-bold">安全 (+{{ taiexAnalysisDynamic.daily.deduction60.diff.toFixed(0) }})</span>
+                                <span v-else class="text-danger fw-bold">跌破 ({{ taiexAnalysisDynamic.daily.deduction60.diff.toFixed(0) }})</span>
+                            </div>
+                        </div>
+
+                        <hr class="mt-auto">
                         <div class="alert mb-0 py-2 fw-bold text-center" :class="taiexAnalysisDynamic.monthly.alertClass">{{ taiexAnalysisDynamic.monthly.alertText }}</div>
                     </div>
                 </div>
             </div>
+
             <div class="col-md-6 mb-3">
                 <div class="card h-100 border-warning shadow-sm">
-                    <div class="card-header bg-warning text-dark fw-bold d-flex justify-content-between"><span>🚀 中線動態極值 (10%)</span><span>基準: {{ taiexAnalysisDynamic.weekly.basePrice.toFixed(0) }}</span></div>
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between mb-2"><span class="text-muted">前次轉折</span><span>{{ taiexAnalysisDynamic.weekly.baseDate }}</span></div>
-                        <div class="d-flex justify-content-between mb-2"><span class="text-muted">目前點位變動</span><span class="fw-bold">{{ taiexAnalysisDynamic.weekly.currentDiff.toFixed(0) }} 點</span></div>
-                        <div class="d-flex justify-content-between mb-3"><span class="text-muted">換算百分比</span><span class="badge bg-primary fs-6">{{ taiexAnalysisDynamic.weekly.percentDiff.toFixed(1) }} %</span></div>
-                        <hr>
+                    <div class="card-header bg-warning text-dark fw-bold d-flex justify-content-between">
+                        <span>🚀 中線動態極值 (7.5%-10%)</span>
+                        <span>最新: {{ taiexAnalysisDynamic.daily.current.toFixed(0) }}</span>
+                    </div>
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">最新週 KD</span>
+                            <span class="fw-bold fs-5">K: <span :class="taiexAnalysisDynamic.weekly.k > 80 ? 'text-danger' : ''">{{ taiexAnalysisDynamic.weekly.k.toFixed(2) }}</span> / D: {{ taiexAnalysisDynamic.weekly.d.toFixed(2) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="text-muted">月線 (20MA) 狀態</span>
+                            <span class="fw-bold fs-5">{{ taiexAnalysisDynamic.daily.ma20.toFixed(2) }} <span v-html="taiexAnalysisDynamic.daily.ma20_trend"></span></span>
+                        </div>
+
+                        <div class="bg-light p-3 rounded border border-warning mb-3">
+                            <div class="fw-bold text-dark mb-2 border-bottom border-warning pb-1">🎯 10% 動態中線追蹤</div>
+                            <div class="d-flex justify-content-between text-muted small mb-1">
+                                <span>轉折起點日期</span><span>{{ taiexAnalysisDynamic.weekly.baseDate }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted small mb-1">
+                                <span>轉折類型</span><span :class="taiexAnalysisDynamic.weekly.type === 'golden' ? 'text-danger fw-bold' : 'text-success fw-bold'">{{ taiexAnalysisDynamic.weekly.crossType }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>基準點位</span><span class="fw-bold">{{ taiexAnalysisDynamic.weekly.basePrice.toFixed(0) }} 點</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>動態極值區間</span><span class="fw-bold text-dark">{{ taiexAnalysisDynamic.weekly.targetPriceMin.toFixed(0) }} ~ {{ taiexAnalysisDynamic.weekly.targetPriceMax.toFixed(0) }} 點</span>
+                            </div>
+                            <div class="mt-2 pt-2 border-top">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="small fw-bold">波段推進進度：</span>
+                                    <span class="badge bg-warning text-dark fs-6">{{ taiexAnalysisDynamic.weekly.currentDiff.toFixed(0) }} 點 ({{ taiexAnalysisDynamic.weekly.percentDiff.toFixed(1) }}%)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-2 rounded border mb-3 small shadow-sm">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">月線(20MA) 防守價</span>
+                                <span class="fw-bold text-dark">{{ taiexAnalysisDynamic.daily.deduction20.price.toFixed(0) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mt-1">
+                                <span>防禦狀態</span>
+                                <span v-if="taiexAnalysisDynamic.daily.deduction20.isSafe" class="text-success fw-bold">安全 (+{{ taiexAnalysisDynamic.daily.deduction20.diff.toFixed(0) }})</span>
+                                <span v-else class="text-danger fw-bold">跌破 ({{ taiexAnalysisDynamic.daily.deduction20.diff.toFixed(0) }})</span>
+                            </div>
+                        </div>
+
+                        <hr class="mt-auto">
                         <div class="alert mb-0 py-2 fw-bold text-center" :class="taiexAnalysisDynamic.weekly.alertClass">{{ taiexAnalysisDynamic.weekly.alertText }}</div>
                     </div>
                 </div>
             </div>
           </div>
 
+          <div v-if="isChartLoadingDynamic" class="text-center my-5">
+            <div class="spinner-border text-danger" role="status"></div>
+            <p class="mt-2 text-muted fw-bold">動態運算分析中...</p>
+          </div>
+
           <div class="card shadow-sm mb-4" v-show="!isChartLoadingDynamic && taiexAllData">
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold text-secondary mb-0">台股加權指數 - 動態對照</h5>
+                <h5 class="fw-bold text-secondary mb-0">台股加權指數 - 動態極值對照</h5>
                 <div class="btn-group">
                   <button v-for="p in ['daily', 'weekly', 'monthly']" :key="p" @click="currentPeriodDynamic = p; renderEChart('taiexChartDynamic', p)" :class="['btn fw-bold', currentPeriodDynamic === p ? 'btn-danger' : 'btn-outline-danger']">{{ p === 'daily' ? '日 K' : p === 'weekly' ? '週 K' : '月 K' }}</button>
                 </div>
@@ -255,7 +339,7 @@ import { useHead } from '#imports'
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
 
 // =====================================
-// 1. 總經資料抓取與同步
+// 1. 總經資料抓取與同步 (保持原本邏輯)
 // =====================================
 const rawResponseData = ref(null);
 const isLoading = ref(true);
@@ -276,13 +360,13 @@ const fetchDashboardData = async () => {
 
 const isSyncing = ref(false);
 const triggerSync = async () => {
-    if (!confirm('確定啟動雲端爬蟲？')) return;
-    isSyncing.value = true;
+    if (!confirm('確定啟動雲端爬蟲？')) return
+    isSyncing.value = true
     const hfBaseUrls = ['https://pyfbsdk59-macrowave-scrape-api.hf.space','https://lawxstudents168-macrowave-scrape-api.hf.space','https://igveri59-macrowave-scrape-api.hf.space'];
     const shuffled = [...hfBaseUrls].sort(() => 0.5 - Math.random());
     for (let url of shuffled) {
         try {
-            const res = await $fetch(`${url}/api/trigger-sync`, { method: 'POST', timeout: 15000 });
+            await $fetch(`${url}/api/trigger-sync`, { method: 'POST', timeout: 15000 });
             alert('指令發送成功，約3分鐘後自動更新。');
             setTimeout(() => window.location.reload(), 180000);
             break;
@@ -320,7 +404,7 @@ const uploadToServer = async () => {
 onMounted(() => fetchDashboardData());
 
 // =====================================
-// 2. 技術指標計算邏輯
+// 2. 技術指標計算核心
 // =====================================
 const taiexAllData = ref(null);
 const isChartLoading = ref(false);
@@ -331,7 +415,7 @@ const currentPeriod = ref('daily');
 const currentPeriodDynamic = ref('daily');
 let chartInstanceMap = {};
 
-function sanitizeData(quotes) { return quotes.filter(q => q.open != null && q.close != null && !isNaN(q.close)); }
+function sanitizeData(quotes) { return quotes.filter(q => q.open != null && q.high != null && q.low != null && q.close != null && !isNaN(q.close)); }
 
 function calculateKD(quotes) {
     let k = 50, d = 50;
@@ -353,15 +437,15 @@ function calculateMA(n, q) {
 }
 
 function findLastCross(kdData) {
+    if (!kdData || kdData.length < 2) return null;
     for (let i = kdData.length - 1; i > 0; i--) {
         const p = kdData[i - 1], c = kdData[i];
-        if (p.k <= p.d && c.k > c.d) return { ...c, type: 'golden', crossType: '黃金交叉' };
-        if (p.k >= p.d && c.k < c.d) return { ...c, type: 'death', crossType: '死亡交叉' };
+        if (p.k <= p.d && c.k > c.d) return { ...c, type: 'golden', crossType: '黃金交叉(偏多)' };
+        if (p.k >= p.d && c.k < c.d) return { ...c, type: 'death', crossType: '死亡交叉(偏空)' };
     }
     return null;
 }
 
-// 取得扣抵資訊
 function getDeduction(dailyData, latestClose, n) {
     const idx = Math.max(0, dailyData.length - n);
     const price = dailyData[idx].close;
@@ -387,7 +471,6 @@ async function initTaiexChart() {
         await prepareData();
         const daily = taiexAllData.value.daily, latest = daily[daily.length-1].close;
         const ma20 = calculateMA(20, daily), ma60 = calculateMA(60, daily);
-        
         const lw = findLastCross(taiexAllData.value.weekly), lm = findLastCross(taiexAllData.value.monthly);
 
         taiexAnalysis.value = {
@@ -399,39 +482,54 @@ async function initTaiexChart() {
             },
             weekly: { 
                 k: taiexAllData.value.weekly[taiexAllData.value.weekly.length-1].k, d: taiexAllData.value.weekly[taiexAllData.value.weekly.length-1].d,
-                analysis: `前次${lw?.crossType}於 ${lw?.date}。已變動 ${Math.round(Math.abs(latest-lw?.close))} 點。`,
-                alertText: Math.abs(latest-lw?.close) > 800 ? '⚠️ 已達極值空間' : '✅ 尚有波段空間', alertClass: Math.abs(latest-lw?.close) > 800 ? 'alert-danger' : 'alert-success'
+                analysis: lw ? `前次${lw.crossType}於 ${lw.date}。波段變動 ${Math.round(Math.abs(latest-lw.close))} 點。` : '數據不足',
+                alertText: lw && Math.abs(latest-lw.close) > 800 ? '⚠️ 已達極值空間' : '✅ 尚有波段空間', alertClass: lw && Math.abs(latest-lw.close) > 800 ? 'alert-danger' : 'alert-success'
             },
             monthly: {
                 k: taiexAllData.value.monthly[taiexAllData.value.monthly.length-1].k, d: taiexAllData.value.monthly[taiexAllData.value.monthly.length-1].d,
-                analysis: `前次${lm?.crossType}於 ${lm?.date}。波段變動 ${Math.round(Math.abs(latest-lm?.close))} 點。`,
-                alertText: Math.abs(latest-lm?.close) > 2000 ? '⚠️ 長波段已達標' : '✅ 長線趨勢運行中', alertClass: Math.abs(latest-lm?.close) > 2000 ? 'alert-danger' : 'alert-success'
+                analysis: lm ? `前次${lm.crossType}於 ${lm.date}。波段變動 ${Math.round(Math.abs(latest-lm.close))} 點。` : '數據不足',
+                alertText: lm && Math.abs(latest-lm.close) > 2000 ? '⚠️ 長波段已達標' : '✅ 長線趨勢運行中', alertClass: lm && Math.abs(latest-lm.close) > 2000 ? 'alert-danger' : 'alert-success'
             }
         };
         renderEChart('taiexChart', 'daily');
     } finally { isChartLoading.value = false; }
 }
 
-// 分頁三：動態分析
+// 分頁三：動態分析 (強化資料注入)
 async function initTaiexDynamicChart() {
-    if (taiexAnalysisDynamic.value) return;
+    if (taiexAnalysisDynamic.value) { renderEChart('taiexChartDynamic', currentPeriodDynamic.value); return; }
     isChartLoadingDynamic.value = true;
     try {
         await prepareData();
         const daily = taiexAllData.value.daily, latest = daily[daily.length-1].close;
+        const ma20 = calculateMA(20, daily), ma60 = calculateMA(60, daily);
         const lw = findLastCross(taiexAllData.value.weekly), lm = findLastCross(taiexAllData.value.monthly);
 
         taiexAnalysisDynamic.value = {
-            daily: taiexAnalysis.value.daily,
+            daily: {
+                current: latest, ma20: ma20[ma20.length-1], ma60: ma60[ma60.length-1],
+                ma20_trend: ma20[ma20.length-1] > ma20[ma20.length-2] ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>',
+                ma60_trend: ma60[ma60.length-1] > ma60[ma60.length-2] ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>',
+                deduction20: getDeduction(daily, latest, 20), deduction60: getDeduction(daily, latest, 60)
+            },
             weekly: { 
                 k: taiexAllData.value.weekly[taiexAllData.value.weekly.length-1].k, d: taiexAllData.value.weekly[taiexAllData.value.weekly.length-1].d,
-                basePrice: lw.close, baseDate: lw.date, currentDiff: Math.abs(latest-lw.close), percentDiff: (Math.abs(latest-lw.close)/lw.close)*100,
-                alertText: (Math.abs(latest-lw.close)/lw.close) > 0.1 ? '⚠️ 突破動態 10% 極值' : '✅ 未滿動態極值', alertClass: (Math.abs(latest-lw.close)/lw.close) > 0.1 ? 'alert-danger' : 'alert-success'
+                basePrice: lw.close, baseDate: lw.date, type: lw.type, crossType: lw.crossType,
+                currentDiff: lw.type === 'golden' ? (latest - lw.close) : (lw.close - latest),
+                percentDiff: (Math.abs(latest - lw.close) / lw.close) * 100,
+                targetPriceMin: lw.type === 'golden' ? (lw.close * 1.075) : (lw.close * 0.925),
+                targetPriceMax: lw.type === 'golden' ? (lw.close * 1.1) : (lw.close * 0.9),
+                alertText: (Math.abs(latest - lw.close) / lw.close) > 0.1 ? '⚠️ 嚴重警戒！突破動態極值 (10%)' : '✅ 順勢推進中，空間未滿',
+                alertClass: (Math.abs(latest - lw.close) / lw.close) > 0.1 ? 'alert-danger' : 'alert-success'
             },
             monthly: {
                 k: taiexAllData.value.monthly[taiexAllData.value.monthly.length-1].k, d: taiexAllData.value.monthly[taiexAllData.value.monthly.length-1].d,
-                basePrice: lm.close, baseDate: lm.date, currentDiff: Math.abs(latest-lm.close), percentDiff: (Math.abs(latest-lm.close)/lm.close)*100,
-                alertText: (Math.abs(latest-lm.close)/lm.close) > 0.25 ? '⚠️ 突破動態 25% 極值' : '✅ 未滿動態極值', alertClass: (Math.abs(latest-lm.close)/lm.close) > 0.25 ? 'alert-danger' : 'alert-success'
+                basePrice: lm.close, baseDate: lm.date, type: lm.type, crossType: lm.crossType,
+                currentDiff: lm.type === 'golden' ? (latest - lm.close) : (lm.close - latest),
+                percentDiff: (Math.abs(latest - lm.close) / lm.close) * 100,
+                targetPrice: lm.type === 'golden' ? (lm.close * 1.25) : (lm.close * 0.75),
+                alertText: (Math.abs(latest - lm.close) / lm.close) > 0.25 ? '⚠️ 大波段警戒！突破動態極值 (25%)' : '✅ 長線空間尚未耗盡',
+                alertClass: (Math.abs(latest - lm.close) / lm.close) > 0.25 ? 'alert-danger' : 'alert-success'
             }
         };
         renderEChart('taiexChartDynamic', 'daily');
@@ -474,10 +572,10 @@ function renderEChart(containerId, periodKey) {
 </script>
 
 <style>
-body { background-color: #f4f6f9; font-family: sans-serif; color: #333; }
+body { background-color: #f4f6f9; font-family: "Segoe UI", Roboto, sans-serif; color: #333; }
 .header-section { background: linear-gradient(135deg, #1a2980 0%, #26d0ce 100%); color: white; padding: 40px 0; margin-bottom: 30px; }
 .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 24px; }
-.nav-tabs .nav-link { border: none; color: #6c757d; transition: all 0.3s; }
+.nav-tabs .nav-link { border: none; color: #6c757d; }
 .nav-tabs .nav-link.active { color: #0d6efd; border-bottom: 4px solid #0d6efd; background-color: transparent; }
 .advice-badge { padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 1.1rem; }
 .advice-Safe { background-color: #d1e7dd; color: #0f5132; }
@@ -485,4 +583,5 @@ body { background-color: #f4f6f9; font-family: sans-serif; color: #333; }
 .advice-Flee { background-color: #f8d7da; color: #842029; }
 .status-Safe { color: #198754; font-weight: bold; }
 .status-Danger { color: #dc3545; font-weight: bold; }
+.metric-item { padding: 10px; border-radius: 8px; background-color: #f8f9fa; border: 1px solid #e9ecef; }
 </style>
