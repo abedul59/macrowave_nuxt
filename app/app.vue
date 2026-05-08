@@ -95,7 +95,7 @@
         <div class="container pb-5 mt-4">
           <div class="row mb-4" v-if="taiexAnalysis">
             <div class="col-12 mb-3">
-                <div class="alert alert-secondary border-secondary">
+                <div class="alert alert-secondary border-secondary shadow-sm">
                     ℹ️ <strong>傳統極值標準 (適用於大盤萬點以下)：</strong> 月線極值看 2,000 點；週線極值看 600~800 點。
                 </div>
             </div>
@@ -173,15 +173,20 @@
           <div class="row mb-4" v-if="taiexAnalysisDynamic">
             
             <div class="col-12 mb-3">
-                <div class="alert alert-primary border-primary">
-                    🚀 <strong>動態極值標準 (適用於 2萬~4萬點大航海時代)：</strong> 根據歷史統計比例，<strong>月線極值空間為起漲點的 25%</strong>；<strong>週線極值空間為起漲點的 7.5% ~ 10%</strong>。系統將根據最新起漲點位自動換算點數！
+                <div class="alert border-primary shadow-sm" style="background-color: #f0f7ff;">
+                    <h5 class="fw-bold text-primary mb-2">🚀 十年週期與動態極值理論 (大航海時代適用)</h5>
+                    <ul class="mb-0 text-dark small" style="line-height: 1.6;">
+                        <li><strong>長波段 (月KD判定)：</strong> 一個大週期約為 10 年 (120 個月)。月 KD 的黃金/死亡交叉是確認長波起點的最佳夥伴。統計極值空間約為起漲/跌點的 <strong>25%</strong>。</li>
+                        <li><strong>中波段 (週KD判定)：</strong> 每年週 KD 約會交叉 6~8 次，每次波段行情約延續 <strong>2個月 (8週)</strong>。統計極值空間約為起漲/跌點的 <strong>7.5% ~ 10%</strong>。</li>
+                        <li><strong>無懼高低檔：</strong> 不再死守 20/80 的高低檔鈍化盲點，只要發生明確交叉即視為波段啟動，並搭配均線扣抵作防守判定。</li>
+                    </ul>
                 </div>
             </div>
 
             <div class="col-md-6 mb-3">
               <div class="card h-100 border-danger shadow-sm">
                 <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between">
-                    <span>長線動態極值 (等比例放大)：月KD</span>
+                    <span>長線循環 (等比極值)：月KD ╳ 季線</span>
                     <span>最新收盤: {{ taiexAnalysisDynamic.daily.current.toFixed(2) }}</span>
                 </div>
                 <div class="card-body d-flex flex-column">
@@ -191,17 +196,20 @@
                   </div>
                   
                   <div class="bg-light p-3 rounded border border-danger mb-3">
-                    <div class="fw-bold text-dark mb-2 border-bottom border-danger pb-1">🎯 動態長線極值計算 (25%)</div>
-                    <div class="d-flex justify-content-between text-muted small mb-1">
-                      <span>黃金交叉起漲點</span><span>{{ taiexAnalysisDynamic.monthly.basePrice.toFixed(0) }} 點</span>
+                    <div class="fw-bold text-dark mb-2 border-bottom border-danger pb-1">🎯 月線轉折追蹤 (極值 25%)</div>
+                    <div v-if="taiexAnalysisDynamic.monthly.basePrice > 0">
+                        <div class="d-flex justify-content-between text-muted small mb-1">
+                          <span>前次轉折時間</span><span>{{ taiexAnalysisDynamic.monthly.baseDate }} (<span :class="taiexAnalysisDynamic.monthly.type === 'golden' ? 'text-danger fw-bold' : 'text-success fw-bold'">{{ taiexAnalysisDynamic.monthly.crossType }}</span>)</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                          <span>轉折基準點位</span><span class="fw-bold fs-5 text-dark">{{ taiexAnalysisDynamic.monthly.basePrice.toFixed(0) }} 點</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                          <span class="text-secondary small">波段已運行：</span>
+                          <span class="badge bg-primary fs-6">{{ taiexAnalysisDynamic.monthly.currentDiff.toFixed(0) }} 點 (約 {{ taiexAnalysisDynamic.monthly.percentDiff.toFixed(1) }}%)</span>
+                        </div>
                     </div>
-                    <div class="d-flex justify-content-between mb-1">
-                      <span>長波段極值換算 (25%)</span><span class="fw-bold fs-5 text-dark">{{ taiexAnalysisDynamic.monthly.targetPts.toFixed(0) }} 點</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mt-2">
-                      <span class="text-secondary small">目前已漲點數：</span>
-                      <span class="badge bg-primary fs-6">{{ taiexAnalysisDynamic.monthly.currentDiff.toFixed(0) }} 點</span>
-                    </div>
+                    <div v-else class="text-center text-muted py-3">歷史數據不足，無法判定轉折點。</div>
                   </div>
 
                   <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-3">
@@ -219,7 +227,7 @@
             <div class="col-md-6 mb-3">
               <div class="card h-100 border-warning shadow-sm">
                 <div class="card-header bg-warning text-dark fw-bold d-flex justify-content-between">
-                    <span>中線動態極值 (等比例放大)：週KD</span>
+                    <span>中線行情 (等比極值)：週KD ╳ 月線</span>
                     <span>最新收盤: {{ taiexAnalysisDynamic.daily.current.toFixed(2) }}</span>
                 </div>
                 <div class="card-body d-flex flex-column">
@@ -229,17 +237,20 @@
                   </div>
 
                   <div class="bg-light p-3 rounded border border-warning mb-3">
-                    <div class="fw-bold text-dark mb-2 border-bottom border-warning pb-1">🎯 動態中線極值計算 (7.5%~10%)</div>
-                    <div class="d-flex justify-content-between text-muted small mb-1">
-                      <span>黃金交叉起漲點</span><span>{{ taiexAnalysisDynamic.weekly.basePrice.toFixed(0) }} 點</span>
+                    <div class="fw-bold text-dark mb-2 border-bottom border-warning pb-1">🎯 週線轉折追蹤 (極值 7.5%~10%)</div>
+                    <div v-if="taiexAnalysisDynamic.weekly.basePrice > 0">
+                        <div class="d-flex justify-content-between text-muted small mb-1">
+                          <span>前次轉折時間</span><span>{{ taiexAnalysisDynamic.weekly.baseDate }} (<span :class="taiexAnalysisDynamic.weekly.type === 'golden' ? 'text-danger fw-bold' : 'text-success fw-bold'">{{ taiexAnalysisDynamic.weekly.crossType }}</span>)</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                          <span>轉折基準點位</span><span class="fw-bold fs-5 text-dark">{{ taiexAnalysisDynamic.weekly.basePrice.toFixed(0) }} 點</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                          <span class="text-secondary small">波段已運行：</span>
+                          <span class="badge bg-primary fs-6">{{ taiexAnalysisDynamic.weekly.currentDiff.toFixed(0) }} 點 (約 {{ taiexAnalysisDynamic.weekly.percentDiff.toFixed(1) }}%)</span>
+                        </div>
                     </div>
-                    <div class="d-flex justify-content-between mb-1">
-                      <span>中波段極值換算區間</span><span class="fw-bold fs-5 text-dark">{{ taiexAnalysisDynamic.weekly.targetMin.toFixed(0) }} ~ {{ taiexAnalysisDynamic.weekly.targetMax.toFixed(0) }} 點</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mt-2">
-                      <span class="text-secondary small">目前已漲點數：</span>
-                      <span class="badge bg-primary fs-6">{{ taiexAnalysisDynamic.weekly.currentDiff.toFixed(0) }} 點</span>
-                    </div>
+                    <div v-else class="text-center text-muted py-3">歷史數據不足，無法判定轉折點。</div>
                   </div>
 
                   <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded mb-3">
@@ -308,13 +319,13 @@ const fetchDashboardData = async () => {
 await fetchDashboardData()
 
 const isSyncing = ref(false)
-const triggerSync = async () => { /* 保留HF同步邏輯 */ }
+const triggerSync = async () => { /* 保留邏輯 */ }
 const isSyncingTwstock = ref(false)
-const triggerTwstockSync = async () => { /* 保留HF同步邏輯 */ }
+const triggerTwstockSync = async () => { /* 保留邏輯 */ }
 const selectedFile = ref(null)
 const isUploading = ref(false)
 const handleFileSelect = (event) => selectedFile.value = event.target.files[0]
-const uploadToServer = async () => { /* 保留上傳邏輯 */ }
+const uploadToServer = async () => { /* 保留邏輯 */ }
 
 
 // =====================================
@@ -352,12 +363,21 @@ function calculateMA(dayCount, quotes) {
   return result;
 }
 
-function findLastGoldenCrossWave(kdData) {
+// 🔥 全新升級：只要發生交叉就算波段起點 (無視高中低檔限制)
+function findLastCrossWave(kdData) {
   if (!kdData || kdData.length < 2) return null;
-  for (let i = kdData.length - 2; i > 0; i--) {
+  // 倒著找，找最近一次明確交叉點
+  for (let i = kdData.length - 1; i > 0; i--) {
     const prev = kdData[i - 1], curr = kdData[i];
-    if (prev && curr && prev.k !== null && prev.k <= prev.d && curr.k > curr.d && curr.k < 30) {
-      return { date: curr.date, close: curr.close }
+    if (prev && curr && prev.k !== null && prev.d !== null && curr.k !== null && curr.d !== null) {
+      // 黃金交叉 (多方波段起點)
+      if (prev.k <= prev.d && curr.k > curr.d) {
+        return { date: curr.date, close: curr.close, type: 'golden' }
+      }
+      // 死亡交叉 (空方波段起點)
+      if (prev.k >= prev.d && curr.k < curr.d) {
+        return { date: curr.date, close: curr.close, type: 'death' }
+      }
     }
   }
   return null;
@@ -390,26 +410,32 @@ async function initTaiexChart() {
   try {
     await fetchAndPrepareData()
     const latestClose = taiexAllData.value.daily[taiexAllData.value.daily.length - 1].close
-    // 傳統邏輯 (固定 600/800 點, 2000點)
-    const lastWeeklyWave = findLastGoldenCrossWave(taiexAllData.value.weekly)
+    
+    // 傳統邏輯 (沿用新版找交叉函數，但不計算百分比)
+    const lastWeeklyWave = findLastCrossWave(taiexAllData.value.weekly)
     let wAnalysis = '', wAlert = '', wClass = ''
     if (lastWeeklyWave) {
-      const pDiff = latestClose - lastWeeklyWave.close
-      wAnalysis = `起漲點在 ${lastWeeklyWave.date}。目前已漲跌 ${Math.round(pDiff)} 點。`
-      if (pDiff >= 800) { wAlert = `⚠️ 傳統週線波段漲 ${Math.round(pDiff)} 點超越 800 極值！`; wClass = 'alert-danger' }
+      const isUp = lastWeeklyWave.type === 'golden'
+      const pDiff = isUp ? (latestClose - lastWeeklyWave.close) : (lastWeeklyWave.close - latestClose)
+      const action = isUp ? '上漲' : '下跌'
+      wAnalysis = `前次 ${isUp ? '黃金' : '死亡'}交叉在 ${lastWeeklyWave.date}。波段已${action} ${Math.round(pDiff)} 點。`
+      if (pDiff >= 800) { wAlert = `⚠️ 傳統週線波段${action} ${Math.round(pDiff)} 點超越 800 極值！`; wClass = 'alert-danger' }
       else if (pDiff >= 600) { wAlert = `⚡ 達 600 極值下緣，留意月線 (20MA) 扣抵值支撐。`; wClass = 'alert-warning' }
-      else { wAlert = `✅ 傳統中線極值未滿足，若防守住 20MA 仍有空間。`; wClass = 'alert-success' }
+      else if (pDiff > 0) { wAlert = `✅ 傳統中線極值未滿足，若防守住 20MA 仍有空間。`; wClass = 'alert-success' }
+      else { wAlert = `📉 逆勢震盪或整理中，留意均線方向。`; wClass = 'alert-secondary' }
     }
 
-    const lastMonthlyWave = findLastGoldenCrossWave(taiexAllData.value.monthly)
+    const lastMonthlyWave = findLastCrossWave(taiexAllData.value.monthly)
     let mAnalysis = '', mAlert = '', mClass = ''
     if (lastMonthlyWave) {
-      const pDiff = latestClose - lastMonthlyWave.close
-      mAnalysis = `起漲點在 ${lastMonthlyWave.date}。長波段已漲跌 ${Math.round(pDiff)} 點。`
+      const isUp = lastMonthlyWave.type === 'golden'
+      const pDiff = isUp ? (latestClose - lastMonthlyWave.close) : (lastMonthlyWave.close - latestClose)
+      const action = isUp ? '上漲' : '下跌'
+      mAnalysis = `前次 ${isUp ? '黃金' : '死亡'}交叉在 ${lastMonthlyWave.date}。長波段已${action} ${Math.round(pDiff)} 點。`
       if (pDiff >= 2000) {
-        if (taiexAllData.value.monthly[taiexAllData.value.monthly.length-1].k > 80) { mAlert = `⚠️ 長波段漲 ${Math.round(pDiff)} 點滿足 2000 點要求！若季線下彎將結束長波段。`; mClass = 'alert-danger' } 
-        else { mAlert = `⚡ 進入長線高檔風險區，緊盯季線扣抵值。`; mClass = 'alert-warning' }
-      } else { mAlert = `✅ 長波段 2000 點極值尚未滿足。`; mClass = 'alert-success' }
+        mAlert = `⚠️ 長波段${action} ${Math.round(pDiff)} 點滿足 2000 點要求！緊盯季線(60MA)防守。`; mClass = 'alert-danger'
+      } else if (pDiff > 0) { mAlert = `✅ 長波段 2000 點極值尚未滿足。`; mClass = 'alert-success' }
+      else { mAlert = `📉 逆勢震盪或整理中，留意均線方向。`; mClass = 'alert-secondary' }
     }
 
     taiexAnalysis.value = {
@@ -421,7 +447,6 @@ async function initTaiexChart() {
   } catch (err) { alert(err) } finally { isChartLoading.value = false }
 }
 
-// 取得最新日線與扣抵資訊
 function getDailyInfo(dailyData, latestClose) {
     const ma20Data = calculateMA(20, dailyData)
     const ma60Data = calculateMA(60, dailyData)
@@ -431,8 +456,8 @@ function getDailyInfo(dailyData, latestClose) {
     const d60_index = Math.max(0, dailyData.length - 60)
     return {
         current: latestClose, ma20: latestMA20, ma60: latestMA60,
-        ma20_trend: latestMA20 > (ma20Data[ma20Data.length-2]||0) ? '<span class="text-danger">↗</span>' : '<span class="text-success">↘</span>',
-        ma60_trend: latestMA60 > (ma60Data[ma60Data.length-2]||0) ? '<span class="text-danger">↗</span>' : '<span class="text-success">↘</span>',
+        ma20_trend: latestMA20 > (ma20Data[ma20Data.length-2]||0) ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>',
+        ma60_trend: latestMA60 > (ma60Data[ma60Data.length-2]||0) ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>',
         deduction20: { date: dailyData[d20_index].date, price: dailyData[d20_index].close, diff: latestClose - dailyData[d20_index].close, isSafe: latestClose >= dailyData[d20_index].close },
         deduction60: { date: dailyData[d60_index].date, price: dailyData[d60_index].close, diff: latestClose - dailyData[d60_index].close, isSafe: latestClose >= dailyData[d60_index].close }
     }
@@ -453,34 +478,46 @@ async function initTaiexDynamicChart() {
     const latestClose = taiexAllData.value.daily[taiexAllData.value.daily.length - 1].close
 
     // 動態週線邏輯 (7.5% ~ 10%)
-    const lastWeeklyWave = findLastGoldenCrossWave(taiexAllData.value.weekly)
-    let dwAlert = '', dwClass = '', wBase = 0, wMin = 0, wMax = 0, wDiff = 0
+    const lastWeeklyWave = findLastCrossWave(taiexAllData.value.weekly)
+    let dwAlert = '', dwClass = '', wBase = 0, wMin = 0, wMax = 0, wDiff = 0, wPct = 0
+    let wDate = '', wType = '', wCrossTxt = ''
     if (lastWeeklyWave) {
-      wBase = lastWeeklyWave.close
-      wMin = wBase * 0.075; wMax = wBase * 0.10; wDiff = latestClose - wBase
-      if (wDiff >= wMax) { dwAlert = `⚠️ 嚴重警戒！中波段漲幅已達 ${((wDiff/wBase)*100).toFixed(1)}%，突破歷史等比極值 (10%)，隨時面臨中級回檔！`; dwClass = 'alert-danger' }
-      else if (wDiff >= wMin) { dwAlert = `⚡ 進入極值滿足區 (${((wDiff/wBase)*100).toFixed(1)}%)，留意跌破 20MA 及扣抵反轉風險。`; dwClass = 'alert-warning' }
-      else if (wDiff > 0) { dwAlert = `✅ 多頭中段班 (${((wDiff/wBase)*100).toFixed(1)}%)，動態空間尚未滿足，防守 20MA 偏多看待。`; dwClass = 'alert-success' }
-      else { dwAlert = `📉 目前中波段處於虧損反向狀態，未進入極值推算範圍。`; dwClass = 'alert-secondary' }
+      wBase = lastWeeklyWave.close; wDate = lastWeeklyWave.date; wType = lastWeeklyWave.type
+      wCrossTxt = wType === 'golden' ? '黃金交叉(偏多)' : '死亡交叉(偏空)'
+      wMin = wBase * 0.075; wMax = wBase * 0.10; 
+      
+      // 計算順勢推進了多少點 (做多看漲，做空看跌)
+      wDiff = wType === 'golden' ? (latestClose - wBase) : (wBase - latestClose)
+      wPct = (wDiff / wBase) * 100
+
+      if (wDiff >= wMax) { dwAlert = `⚠️ 嚴重警戒！中波段已順勢推進 ${wPct.toFixed(1)}%，突破等比極值 (10%)，面臨極大反轉風險！`; dwClass = 'alert-danger' }
+      else if (wDiff >= wMin) { dwAlert = `⚡ 進入極值滿足區 (${wPct.toFixed(1)}%)，強烈建議留意 20MA 均線扣抵是否反轉。`; dwClass = 'alert-warning' }
+      else if (wDiff > 0) { dwAlert = `✅ 波段行進中 (${wPct.toFixed(1)}%)，動態空間尚未滿足，沿均線順勢操作。`; dwClass = 'alert-success' }
+      else { dwAlert = `📉 目前大盤走勢與週KD指標背離或處於震盪洗盤，請嚴守均線紀律。`; dwClass = 'alert-secondary' }
     }
 
     // 動態月線邏輯 (25%)
-    const lastMonthlyWave = findLastGoldenCrossWave(taiexAllData.value.monthly)
-    let dmAlert = '', dmClass = '', mBase = 0, mTarget = 0, mDiff = 0
+    const lastMonthlyWave = findLastCrossWave(taiexAllData.value.monthly)
+    let dmAlert = '', dmClass = '', mBase = 0, mTarget = 0, mDiff = 0, mPct = 0
+    let mDate = '', mType = '', mCrossTxt = ''
     if (lastMonthlyWave) {
-      mBase = lastMonthlyWave.close
-      mTarget = mBase * 0.25; mDiff = latestClose - mBase
+      mBase = lastMonthlyWave.close; mDate = lastMonthlyWave.date; mType = lastMonthlyWave.type
+      mCrossTxt = mType === 'golden' ? '黃金交叉(偏多)' : '死亡交叉(偏空)'
+      mTarget = mBase * 0.25; 
+      
+      mDiff = mType === 'golden' ? (latestClose - mBase) : (mBase - latestClose)
+      mPct = (mDiff / mBase) * 100
+
       if (mDiff >= mTarget) {
-        if (taiexAllData.value.monthly[taiexAllData.value.monthly.length-1].k > 80) { dmAlert = `⚠️ 長波段漲勢達 ${((mDiff/mBase)*100).toFixed(1)}%，完美滿足動態極值！若季線(60MA)下彎將結束大多頭。`; dmClass = 'alert-danger' } 
-        else { dmAlert = `⚡ 進入長線動態滿足點，緊盯季線扣抵值。`; dmClass = 'alert-warning' }
-      } else if (mDiff > 0) { dmAlert = `✅ 長波段僅達 ${((mDiff/mBase)*100).toFixed(1)}%，動態極值 (25%) 尚未滿足。`; dmClass = 'alert-success' }
-      else { dmAlert = `📉 長線目前處於反向回檔區。`; dmClass = 'alert-secondary' }
+        dmAlert = `⚠️ 長波段已順勢推進 ${mPct.toFixed(1)}%，完美滿足動態極值 (25%)！一旦季線(60MA)跌破扣抵並下彎，長線趨勢宣告結束。`; dmClass = 'alert-danger'
+      } else if (mDiff > 0) { dmAlert = `✅ 長波段順勢推進中 (${mPct.toFixed(1)}%)，距離動態極值 (25%) 仍有空間。`; dmClass = 'alert-success' }
+      else { dmAlert = `📉 長線目前處於背離震盪區，請以季線防守為依歸。`; dmClass = 'alert-secondary' }
     }
 
     taiexAnalysisDynamic.value = {
       daily: getDailyInfo(taiexAllData.value.daily, latestClose),
-      weekly: { k: taiexAllData.value.weekly[taiexAllData.value.weekly.length - 1].k, d: taiexAllData.value.weekly[taiexAllData.value.weekly.length - 1].d, alertText: dwAlert, alertClass: dwClass, basePrice: wBase, targetMin: wMin, targetMax: wMax, currentDiff: wDiff },
-      monthly: { k: taiexAllData.value.monthly[taiexAllData.value.monthly.length - 1].k, d: taiexAllData.value.monthly[taiexAllData.value.monthly.length - 1].d, alertText: dmAlert, alertClass: dmClass, basePrice: mBase, targetPts: mTarget, currentDiff: mDiff }
+      weekly: { k: taiexAllData.value.weekly[taiexAllData.value.weekly.length - 1].k, d: taiexAllData.value.weekly[taiexAllData.value.weekly.length - 1].d, alertText: dwAlert, alertClass: dwClass, basePrice: wBase, baseDate: wDate, type: wType, crossType: wCrossTxt, targetMin: wMin, targetMax: wMax, currentDiff: wDiff, percentDiff: wPct },
+      monthly: { k: taiexAllData.value.monthly[taiexAllData.value.monthly.length - 1].k, d: taiexAllData.value.monthly[taiexAllData.value.monthly.length - 1].d, alertText: dmAlert, alertClass: dmClass, basePrice: mBase, baseDate: mDate, type: mType, crossType: mCrossTxt, targetPts: mTarget, currentDiff: mDiff, percentDiff: mPct }
     }
     renderEChart('taiexChartDynamic', currentPeriodDynamic.value)
   } catch (err) { alert(err) } finally { isChartLoadingDynamic.value = false }
