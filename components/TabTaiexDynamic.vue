@@ -13,7 +13,7 @@
         <div class="row align-items-center">
           <div class="col-lg-5">
             <div class="small p-3 bg-white rounded border" style="line-height: 1.7; color: #444;">
-              <p class="mb-2"><strong>1. 結構與規律：</strong> 每一次的十年週期約 120 個月，內含大多頭與空頭修正波。根據西元年規律，<strong>尾數 2, 5, 8 年的年底為多頭起漲點；尾數 7, 9 年的年中為空頭起跌點</strong>。</p>
+              <p class="mb-2"><strong>1. 結構與規律：</strong> 每一次的十年週期約 120 個月，內含大多頭與空頭修正波。根據西元年規律，<strong>尾數 2, 5, 8 年的年底為多頭起漲點；尾數 7, 0 年的年中為空頭起跌點</strong>。</p>
               <p class="mb-2"><strong>2. 週期多空細解：</strong> 十年中包含明顯的上升浪與 A-B-C 下跌調整。把握這幾個關鍵西元年尾數，就能抓到長波段的最佳轉換時機。</p>
               <p class="mb-0"><strong>3. KD 極值對應：</strong> 月KD交叉定波段 (十年內約6-8次交叉，極值約 25%)。週KD每年交叉 6~8 次 (存續約2個月，極值約 7.5%~10%)。</p>
             </div>
@@ -278,7 +278,7 @@ onMounted(async () => {
     }
 });
 
-// 🔥 重新設計的十年週期規律圖 (尾數2起漲 / 尾數5高檔 / 尾數7起跌 / 尾數8起漲 / 尾數9起跌)
+// 🔥 重新設計的十年週期規律圖 (尾數2起漲 / 尾數5起漲 / 尾數7起跌 / 尾數8起漲 / 尾數0起跌)
 function drawTheoryDiagram() {
     const dom = document.getElementById('theoryDiagram');
     if(!dom || !window.echarts) return;
@@ -291,8 +291,8 @@ function drawTheoryDiagram() {
         tooltip: { trigger: 'axis', formatter: '{b}' },
         xAxis: { 
             type: 'category', 
-            // 完美對應附圖與修正規律的西元年尾數
-            data: ['尾數 2\n年底起漲', '過渡波', '尾數 5\n年底起漲', '尾數 7\n年中起跌', '尾數 8\n年底起漲', '尾數 9\n年中起跌', '空頭落底', '尾數 2\n年底起漲'], 
+            // 完美對應附圖與最新修正的西元年尾數 (7, 0 起跌)
+            data: ['尾數 2\n年底起漲', '過渡波', '尾數 5\n年底起漲', '尾數 7\n年中起跌', '尾數 8\n年底起漲', '尾數 0\n年中起跌', '空頭落底', '尾數 2\n年底起漲'], 
             axisLine: { show: true, lineStyle: { color: '#ccc' } }, 
             axisLabel: { fontSize: 11, interval: 0, fontWeight: 'bold', color: '#555' } 
         },
