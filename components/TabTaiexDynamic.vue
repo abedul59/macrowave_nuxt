@@ -13,24 +13,28 @@
         <div class="row align-items-center">
           <div class="col-lg-5">
             <div class="small p-3 bg-white rounded border" style="line-height: 1.6; color: #444;">
-              <p class="mb-2"><strong>1. 結構與浪數：</strong> 每週期約 120 個月，內含大多頭 5 浪及空頭修正波。</p>
-              <p class="mb-2"><strong>2. 月 KD 定波：</strong> 月 KD 的交叉是判斷長波段起點的最佳夥伴。極值約為起點 <strong>25%</strong>。</p>
-              <p class="mb-0"><strong>3. 週 KD 節奏：</strong> 每年交叉 6~8 次，每次存續約 <strong>2 個月 (8週)</strong>。極值約為 <strong>7.5%~10%</strong>。</p>
+              <p class="mb-1"><strong>1. 結構與浪數：</strong> 每週期約 120 個月，內含大多頭 5 浪及空頭修正波。西元年<strong>尾數逢2起漲、逢5高檔、逢8落底</strong>。</p>
+              <p class="mb-1"><strong>2. 月 KD 定波：</strong> 判斷長波段起點的最佳夥伴。十年內月KD交叉約 <strong>6~8次</strong>，需配合均線判斷真假跌破。極值空間約為起漲點 <strong>25%</strong>。</p>
+              <p class="mb-0"><strong>3. 週 KD 節奏：</strong> 每年交叉 6~8 次，每次存續約 <strong>2 個月 (8週)</strong>。極值約為起點 <strong>7.5%~10%</strong>。</p>
             </div>
           </div>
           <div class="col-lg-7 mt-3 mt-lg-0">
-            <div id="theoryDiagram" style="width: 100%; height: 180px;"></div>
-            <div class="text-center small text-muted">台股 120 個月循環示意圖</div>
+            <div id="theoryDiagram" style="width: 100%; height: 200px;"></div>
+            <div class="text-center small text-muted mt-1">台股 120 個月 (十年) 循環示意圖</div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="row mb-4" v-if="analysis">
+      
       <div class="col-md-6 mb-3">
           <div class="card h-100 border-danger shadow-sm">
               <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
-                  <span>🚀 長線動態極值 (25%)</span><span class="badge bg-white text-danger">月 KD 次數: {{ analysis.monthly.crossCount }}</span>
+                  <span>🚀 長線動態極值 (25%)</span>
+                  <span :class="['badge', analysis.monthly.crossCount >= 6 ? 'bg-danger text-white border border-white' : 'bg-white text-danger']">
+                      近10年月KD交叉: {{ analysis.monthly.crossCount }} 次
+                  </span>
               </div>
               <div class="card-body d-flex flex-column">
                   <div class="d-flex justify-content-between mb-2"><span class="text-muted">最新月 KD</span><span class="fw-bold fs-5">K: <span :class="analysis.monthly.k > 80 ? 'text-danger' : ''">{{ analysis.monthly.k.toFixed(2) }}</span> / D: {{ analysis.monthly.d.toFixed(2) }}</span></div>
@@ -39,7 +43,7 @@
                   <div class="bg-light p-3 rounded border border-danger mb-3">
                       <div class="fw-bold text-danger mb-2 border-bottom border-danger pb-1">🎯 25% 動態極值追蹤</div>
                       <div v-if="analysis.monthly.basePrice > 0">
-                          <div class="d-flex justify-content-between small mb-1"><span>轉折日期</span><span>{{ analysis.monthly.baseDate }}</span></div>
+                          <div class="d-flex justify-content-between small mb-1"><span>前次轉折日期</span><span>{{ analysis.monthly.baseDate }}</span></div>
                           <div class="d-flex justify-content-between small mb-1"><span>轉折類型</span><span :class="analysis.monthly.type === 'golden' ? 'text-danger fw-bold' : 'text-success fw-bold'">{{ analysis.monthly.crossType }}</span></div>
                           <div class="d-flex justify-content-between mb-1"><span>基準點位</span><span class="fw-bold">{{ analysis.monthly.basePrice.toFixed(0) }} 點</span></div>
                           <div class="d-flex justify-content-between mb-1"><span>動態極值目標</span><span class="fw-bold text-dark">{{ analysis.monthly.targetPrice.toFixed(0) }} 點</span></div>
@@ -57,6 +61,8 @@
                           <span v-else class="text-danger fw-bold">跌破 ({{ analysis.daily.deduction60.diff.toFixed(0) }})</span>
                       </div>
                   </div>
+                  
+                  <div v-if="analysis.monthly.crossCount >= 6" class="alert alert-secondary py-1 mb-2 text-center small fw-bold">💡 提示：近10年交叉達 {{ analysis.monthly.crossCount }} 次，請配合均線判斷真假轉折</div>
                   <hr class="mt-auto">
                   <div class="alert mb-0 py-2 fw-bold text-center" :class="analysis.monthly.alertClass">{{ analysis.monthly.alertText }}</div>
               </div>
@@ -66,7 +72,8 @@
       <div class="col-md-6 mb-3">
           <div class="card h-100 border-warning shadow-sm">
               <div class="card-header bg-warning text-dark fw-bold d-flex justify-content-between align-items-center">
-                  <span>🚀 中線動態極值 (10%)</span><span :class="['badge', analysis.weekly.crossCount > 8 ? 'bg-danger' : 'bg-dark']">今年週 KD: {{ analysis.weekly.crossCount }} 次</span>
+                  <span>🚀 中線動態極值 (10%)</span>
+                  <span :class="['badge', analysis.weekly.crossCount > 8 ? 'bg-danger text-white' : 'bg-dark text-white']">今年週 KD: {{ analysis.weekly.crossCount }} 次</span>
               </div>
               <div class="card-body d-flex flex-column">
                   <div class="d-flex justify-content-between mb-2"><span class="text-muted">最新週 KD</span><span class="fw-bold fs-5">K: <span :class="analysis.weekly.k > 80 ? 'text-danger' : ''">{{ analysis.weekly.k.toFixed(2) }}</span> / D: {{ analysis.weekly.d.toFixed(2) }}</span></div>
@@ -75,7 +82,7 @@
                   <div class="bg-light p-3 rounded border border-warning mb-3">
                       <div class="fw-bold text-dark mb-2 border-bottom border-warning pb-1">🎯 10% 動態極值追蹤</div>
                       <div v-if="analysis.weekly.basePrice > 0">
-                          <div class="d-flex justify-content-between small mb-1"><span>轉折日期</span><span>{{ analysis.weekly.baseDate }}</span></div>
+                          <div class="d-flex justify-content-between small mb-1"><span>前次轉折日期</span><span>{{ analysis.weekly.baseDate }}</span></div>
                           <div class="d-flex justify-content-between small mb-1"><span>轉折類型</span><span :class="analysis.weekly.type === 'golden' ? 'text-danger fw-bold' : 'text-success fw-bold'">{{ analysis.weekly.crossType }}</span></div>
                           <div class="d-flex justify-content-between mb-1"><span>基準點位</span><span class="fw-bold">{{ analysis.weekly.basePrice.toFixed(0) }} 點</span></div>
                           <div class="d-flex justify-content-between mb-1"><span>極值區間</span><span class="fw-bold text-dark">{{ analysis.weekly.targetMin.toFixed(0) }} ~ {{ analysis.weekly.targetMax.toFixed(0) }} 點</span></div>
@@ -109,19 +116,20 @@
     <div class="card shadow-sm mb-4" v-show="!isLoading && taiexData && !errorMsg">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-          <h5 class="fw-bold text-secondary mb-0">台股加權指數 - 動態極值對照</h5>
+          <h5 class="fw-bold text-secondary mb-0">台股加權指數 - 動態極值對照圖</h5>
           <div class="btn-group mt-2 mt-md-0">
-            <button v-for="p in ['daily', 'weekly', 'monthly']" :key="p" @click="currentPeriod = p; renderChart()" :class="['btn fw-bold', currentPeriod === p ? 'btn-danger' : 'btn-outline-danger']">{{ p === 'daily' ? '日 K' : p === 'weekly' ? '週 K' : '月 K' }}</button>
+            <button v-for="p in ['daily', 'weekly', 'monthly']" :key="p" @click="currentPeriod = p; renderChart()" :class="['btn fw-bold px-4', currentPeriod === p ? 'btn-danger' : 'btn-outline-danger']">{{ p === 'daily' ? '日 K' : p === 'weekly' ? '週 K' : '月 K' }}</button>
           </div>
         </div>
         <div id="taiexChartDyn" style="width: 100%; height: 75vh; min-height: 550px;"></div>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 
 const isLoading = ref(true);
 const errorMsg = ref('');
@@ -129,13 +137,15 @@ const taiexData = ref(null);
 const analysis = ref(null);
 const currentPeriod = ref('daily');
 let chartInstance = null;
+let theoryChartInstance = null;
 
-// 防呆：去除空值或 NaN 的髒數據
+// 淨化資料
 const sanitize = (q) => {
     if (!q || !Array.isArray(q)) return [];
     return q.filter(x => x.open != null && x.close != null && !isNaN(x.close));
 };
 
+// 計算 KD
 const calcKD = (q) => {
     let k=50, d=50;
     return q.map((x, i, a) => {
@@ -147,30 +157,41 @@ const calcKD = (q) => {
     });
 };
 
+// 計算均線
 const calcMA = (n, q) => q.map((_, i, a) => i < n-1 ? null : a.slice(i-n+1, i+1).reduce((s, x)=>s+x.close,0)/n);
 
+// 尋找最後一次交叉點 (不限高低檔)
 const findCross = (kd) => {
     if (!kd || kd.length < 2) return null;
     for(let i = kd.length-1; i>0; i--) {
         const p=kd[i-1], c=kd[i];
         if(p.k != null && p.d != null && c.k != null && c.d != null) {
-            if(p.k<=p.d && c.k>c.d) return {...c, type:'golden', crossType:'黃金交叉'};
-            if(p.k>=p.d && c.k<c.d) return {...c, type:'death', crossType:'死亡交叉'};
+            if(p.k<=p.d && c.k>c.d) return {...c, type:'golden', crossType:'黃金交叉 (偏多)'};
+            if(p.k>=p.d && c.k<c.d) return {...c, type:'death', crossType:'死亡交叉 (偏空)'};
         }
     } return null;
 };
 
-const countCross = (kd, yearOnly) => {
+// 計算交叉次數
+const countCross = (kd, periodStr) => {
     if (!kd || kd.length < 2) return 0;
-    let cnt = 0, currentYr = new Date().getFullYear();
+    let cnt = 0;
+    const currentYr = new Date().getFullYear();
+    const tenYrsAgo = currentYr - 10;
+    
     for(let i=1; i<kd.length; i++) {
         const p=kd[i-1], c=kd[i];
         if(p.k == null || p.d == null || c.k == null || c.d == null) continue;
-        if(yearOnly && new Date(c.date).getFullYear() !== currentYr) continue;
+        const dYr = new Date(c.date).getFullYear();
+        
+        if(periodStr === 'year' && dYr !== currentYr) continue;
+        if(periodStr === 'decade' && dYr < tenYrsAgo) continue;
+        
         if((p.k<=p.d && c.k>c.d) || (p.k>=p.d && c.k<c.d)) cnt++;
     } return cnt;
 };
 
+// 取得扣抵資訊
 const getDeduction = (dailyData, latestClose, n) => {
     if (!dailyData || dailyData.length === 0) return { price: 0, diff: 0, isSafe: true, date: '--' };
     const idx = Math.max(0, dailyData.length - n);
@@ -178,6 +199,7 @@ const getDeduction = (dailyData, latestClose, n) => {
     return { date: target.date, price: target.close || 0, diff: latestClose - (target.close || 0), isSafe: latestClose >= (target.close || 0) };
 };
 
+// 生命週期：組件掛載時執行
 onMounted(async () => {
     try {
         const res = await $fetch('/api/taiex');
@@ -198,7 +220,6 @@ onMounted(async () => {
         const lw = findCross(taiexData.value.weekly);
         const lm = findCross(taiexData.value.monthly);
 
-        // 安全取得數值防呆
         const getPct = (wave) => wave ? (Math.abs(latest - wave.close) / wave.close) * 100 : 0;
         const getDiff = (wave) => wave ? (wave.type === 'golden' ? latest - wave.close : wave.close - latest) : 0;
         const getVal = (arr) => arr && arr.length > 0 ? arr[arr.length-1] : {k:0, d:0};
@@ -208,8 +229,8 @@ onMounted(async () => {
         analysis.value = {
             daily: {
                 current: latest, ma20: getMa(ma20), ma60: getMa(ma60),
-                ma20_trend: getMa(ma20) > getPrevMa(ma20) ? '<span class="text-danger">↗</span>' : '<span class="text-success">↘</span>',
-                ma60_trend: getMa(ma60) > getPrevMa(ma60) ? '<span class="text-danger">↗</span>' : '<span class="text-success">↘</span>',
+                ma20_trend: getMa(ma20) > getPrevMa(ma20) ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>',
+                ma60_trend: getMa(ma60) > getPrevMa(ma60) ? '<span class="text-danger">↗ (上揚)</span>' : '<span class="text-success">↘ (下彎)</span>',
                 deduction20: getDeduction(daily, latest, 20),
                 deduction60: getDeduction(daily, latest, 60)
             },
@@ -219,7 +240,7 @@ onMounted(async () => {
                 currentDiff: Math.abs(getDiff(lw)), percentDiff: getPct(lw),
                 targetMin: lw ? lw.close * (lw.type==='golden'?1.075:0.925) : 0,
                 targetMax: lw ? lw.close * (lw.type==='golden'?1.1:0.9) : 0,
-                crossCount: countCross(taiexData.value.weekly, true),
+                crossCount: countCross(taiexData.value.weekly, 'year'),
                 alertText: lw && getPct(lw) > 10 ? '⚠️ 嚴重警戒！突破 10% 動態極值' : '✅ 順勢推進中，空間未滿',
                 alertClass: lw && getPct(lw) > 10 ? 'alert-danger' : 'alert-success'
             },
@@ -228,25 +249,27 @@ onMounted(async () => {
                 basePrice: lm?.close||0, baseDate: lm?.date||'--', type: lm?.type||'', crossType: lm?.crossType||'--',
                 currentDiff: Math.abs(getDiff(lm)), percentDiff: getPct(lm),
                 targetPrice: lm ? lm.close * (lm.type==='golden'?1.25:0.75) : 0,
-                crossCount: countCross(taiexData.value.monthly, false),
+                crossCount: countCross(taiexData.value.monthly, 'decade'),
                 alertText: lm && getPct(lm) > 25 ? '⚠️ 突破 25% 長波動態極值' : '✅ 長線動態空間未滿',
                 alertClass: lm && getPct(lm) > 25 ? 'alert-danger' : 'alert-success'
             }
         };
 
-        // 輪詢等待 ECharts 載入 (解決網路慢導致的報錯)
-        let checkCount = 0;
-        const checkEcharts = setInterval(() => {
-            if (window.echarts) {
-                clearInterval(checkEcharts);
-                renderChart();
-                drawTheoryDiagram();
-            } else if (checkCount > 50) { // 10秒超時
-                clearInterval(checkEcharts);
-                errorMsg.value = '圖表庫 (ECharts) 載入失敗，請檢查網路連線。';
-            }
-            checkCount++;
-        }, 200);
+        // 等待 DOM 更新後繪製圖表
+        nextTick(() => {
+            let checkCount = 0;
+            const checkEcharts = setInterval(() => {
+                if (window.echarts) {
+                    clearInterval(checkEcharts);
+                    drawTheoryDiagram();
+                    renderChart();
+                } else if (checkCount > 50) { // 10秒超時
+                    clearInterval(checkEcharts);
+                    errorMsg.value = '圖表庫 (ECharts) 載入失敗，請檢查網路連線。';
+                }
+                checkCount++;
+            }, 200);
+        });
 
     } catch (err) {
         errorMsg.value = err.message || '資料解析發生未知的錯誤';
@@ -256,18 +279,33 @@ onMounted(async () => {
     }
 });
 
+// 🔥 繪製十年週期理論圖 (西元年尾數 2, 5, 8 標示)
 function drawTheoryDiagram() {
     const dom = document.getElementById('theoryDiagram');
     if(!dom || !window.echarts) return;
-    const inst = window.echarts.init(dom);
-    inst.setOption({
-        grid: { top: 20, bottom: 20, left: 40, right: 20 },
-        xAxis: { type: 'category', data: ['起','浪1','浪2','浪3','浪4','浪5','空A','空B','空C','空修','終'], axisLine: { show: false } },
+    
+    if (theoryChartInstance) theoryChartInstance.dispose();
+    theoryChartInstance = window.echarts.init(dom);
+    
+    theoryChartInstance.setOption({
+        grid: { top: 30, bottom: 30, left: 30, right: 30 },
+        xAxis: { 
+            type: 'category', 
+            data: ['尾數 2\n(起漲)','浪1','浪2','浪3','尾數 5\n(高檔)','浪5','空A','空B','空C','尾數 8\n(落底)','次循環'], 
+            axisLine: { show: false }, 
+            axisLabel: { fontSize: 11, interval: 0, fontWeight: 'bold' } 
+        },
         yAxis: { show: false },
         series: [{
-            type: 'line', smooth: true, symbolSize: 10, lineStyle: { width: 4, color: '#0d6efd' },
+            type: 'line', smooth: true, symbolSize: 8, lineStyle: { width: 3, color: '#0d6efd' },
             data: [10, 40, 25, 70, 50, 100, 60, 80, 20, 10, 15],
-            markPoint: { data: [{ name: '起', coord: [0, 10], itemStyle: {color: 'red'} }, { name: '高', coord: [5, 100], itemStyle: {color: 'orange'} }] }
+            markPoint: { 
+                data: [
+                    { name: '起漲', coord: [0, 10], itemStyle: {color: '#dc3545'} }, 
+                    { name: '高檔', coord: [5, 100], itemStyle: {color: '#ffc107'} }, 
+                    { name: '落底', coord: [9, 10], itemStyle: {color: '#198754'} }
+                ] 
+            }
         }]
     });
 }
@@ -293,6 +331,7 @@ function renderChart() {
 
     const dom = document.getElementById('taiexChartDyn');
     if(!dom || !window.echarts) return;
+    
     if(chartInstance) chartInstance.dispose();
     chartInstance = window.echarts.init(dom);
     
