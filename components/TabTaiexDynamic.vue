@@ -7,20 +7,19 @@
 
     <div class="card shadow-sm border-0 mb-4 overflow-hidden">
       <div class="card-header bg-primary text-white py-3">
-        <h5 class="fw-bold mb-0">📜 台股十年週期理論 (120個月長線模型)</h5>
+        <h5 class="fw-bold mb-0">📜 台股十年週期理論 (加權指數規律修訂版)</h5>
       </div>
       <div class="card-body bg-light">
         <div class="row align-items-center">
           <div class="col-lg-5">
-            <div class="small p-3 bg-white rounded border" style="line-height: 1.6; color: #444;">
-              <p class="mb-1"><strong>1. 結構與浪數：</strong> 每週期約 120 個月，內含大多頭 5 浪及空頭修正波。西元年<strong>尾數逢2起漲、逢5高檔、逢8落底</strong>。</p>
-              <p class="mb-1"><strong>2. 月 KD 定波：</strong> 判斷長波段起點的最佳夥伴。十年內月KD交叉約 <strong>6~8次</strong>，需配合均線判斷真假跌破。極值空間約為起漲點 <strong>25%</strong>。</p>
-              <p class="mb-0"><strong>3. 週 KD 節奏：</strong> 每年交叉 6~8 次，每次存續約 <strong>2 個月 (8週)</strong>。極值約為起點 <strong>7.5%~10%</strong>。</p>
+            <div class="small p-3 bg-white rounded border" style="line-height: 1.7; color: #444;">
+              <p class="mb-2"><strong>1. 結構與規律：</strong> 每一次的十年週期約 120 個月，內含大多頭與空頭修正波。根據西元年規律，<strong>尾數 2, 5, 8 年的年底為多頭起漲點；尾數 7, 9 年的年中為空頭起跌點</strong>。</p>
+              <p class="mb-2"><strong>2. 週期多空細解：</strong> 十年中包含明顯的上升浪與 A-B-C 下跌調整。把握這幾個關鍵西元年尾數，就能抓到長波段的最佳轉換時機。</p>
+              <p class="mb-0"><strong>3. KD 極值對應：</strong> 月KD交叉定波段 (十年內約6-8次交叉，極值約 25%)。週KD每年交叉 6~8 次 (存續約2個月，極值約 7.5%~10%)。</p>
             </div>
           </div>
           <div class="col-lg-7 mt-3 mt-lg-0">
-            <div id="theoryDiagram" style="width: 100%; height: 200px;"></div>
-            <div class="text-center small text-muted mt-1">台股 120 個月 (十年) 循環示意圖</div>
+            <div id="theoryDiagram" style="width: 100%; height: 230px;"></div>
           </div>
         </div>
       </div>
@@ -160,7 +159,7 @@ const calcKD = (q) => {
 // 計算均線
 const calcMA = (n, q) => q.map((_, i, a) => i < n-1 ? null : a.slice(i-n+1, i+1).reduce((s, x)=>s+x.close,0)/n);
 
-// 尋找最後一次交叉點 (不限高低檔)
+// 尋找最後一次交叉點
 const findCross = (kd) => {
     if (!kd || kd.length < 2) return null;
     for(let i = kd.length-1; i>0; i--) {
@@ -279,7 +278,7 @@ onMounted(async () => {
     }
 });
 
-// 🔥 繪製十年週期理論圖 (西元年尾數 2, 5, 8 標示)
+// 🔥 重新設計的十年週期規律圖 (尾數2起漲 / 尾數5高檔 / 尾數7起跌 / 尾數8起漲 / 尾數9起跌)
 function drawTheoryDiagram() {
     const dom = document.getElementById('theoryDiagram');
     if(!dom || !window.echarts) return;
@@ -288,22 +287,28 @@ function drawTheoryDiagram() {
     theoryChartInstance = window.echarts.init(dom);
     
     theoryChartInstance.setOption({
-        grid: { top: 30, bottom: 30, left: 30, right: 30 },
+        grid: { top: 35, bottom: 25, left: 30, right: 30 },
+        tooltip: { trigger: 'axis', formatter: '{b}' },
         xAxis: { 
             type: 'category', 
-            data: ['尾數 2\n(起漲)','浪1','浪2','浪3','尾數 5\n(高檔)','浪5','空A','空B','空C','尾數 8\n(落底)','次循環'], 
-            axisLine: { show: false }, 
-            axisLabel: { fontSize: 11, interval: 0, fontWeight: 'bold' } 
+            // 完美對應附圖與修正規律的西元年尾數
+            data: ['尾數 2\n年底起漲', '過渡波', '尾數 5\n年底起漲', '尾數 7\n年中起跌', '尾數 8\n年底起漲', '尾數 9\n年中起跌', '空頭落底', '尾數 2\n年底起漲'], 
+            axisLine: { show: true, lineStyle: { color: '#ccc' } }, 
+            axisLabel: { fontSize: 11, interval: 0, fontWeight: 'bold', color: '#555' } 
         },
-        yAxis: { show: false },
+        yAxis: { show: false, min: 0, max: 110 },
         series: [{
-            type: 'line', smooth: true, symbolSize: 8, lineStyle: { width: 3, color: '#0d6efd' },
-            data: [10, 40, 25, 70, 50, 100, 60, 80, 20, 10, 15],
+            type: 'line', smooth: true, symbolSize: 6, lineStyle: { width: 3, color: '#0d6efd' },
+            data: [20, 60, 40, 90, 60, 100, 30, 20], // 高低點趨勢數值模擬
             markPoint: { 
+                symbolSize: 45,
                 data: [
-                    { name: '起漲', coord: [0, 10], itemStyle: {color: '#dc3545'} }, 
-                    { name: '高檔', coord: [5, 100], itemStyle: {color: '#ffc107'} }, 
-                    { name: '落底', coord: [9, 10], itemStyle: {color: '#198754'} }
+                    { name: '起漲', coord: [0, 20], itemStyle: {color: '#dc3545'}, value: '起漲', label: {color: '#fff', fontSize: 10} }, 
+                    { name: '起漲', coord: [2, 40], itemStyle: {color: '#dc3545'}, value: '起漲', label: {color: '#fff', fontSize: 10} }, 
+                    { name: '起跌', coord: [3, 90], itemStyle: {color: '#198754'}, value: '起跌', label: {color: '#fff', fontSize: 10} },
+                    { name: '起漲', coord: [4, 60], itemStyle: {color: '#dc3545'}, value: '起漲', label: {color: '#fff', fontSize: 10} },
+                    { name: '起跌', coord: [5, 100], itemStyle: {color: '#198754'}, value: '起跌', label: {color: '#fff', fontSize: 10} },
+                    { name: '次循環', coord: [7, 20], itemStyle: {color: '#dc3545'}, value: '次循環', label: {color: '#fff', fontSize: 10} }
                 ] 
             }
         }]
