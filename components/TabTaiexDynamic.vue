@@ -1,6 +1,72 @@
 <template>
   <div class="container pb-5 mt-4">
     
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h4 class="fw-bold mb-0 text-secondary" style="font-size: 1.25rem;"></h4>
+        <a href="https://drive.google.com/drive/folders/1NM0lB14yK3iEv_HclNKyVgda8AdT6IOy?usp=sharing" 
+           target="_blank" rel="noopener noreferrer" 
+           class="btn btn-info fw-bold shadow-sm text-dark">
+           📁 觀看 Evacarry 資料
+        </a>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4 bg-light">
+      <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0">📌 專屬佈告欄筆記 (雲端同步)</h6>
+        <button class="btn btn-light btn-sm fw-bold text-success" @click="openBulletinModal" v-if="!showBulletinForm">
+          ➕ 新增筆記
+        </button>
+      </div>
+      
+      <div class="card-body" v-if="showBulletinForm">
+        <div class="bg-white p-3 rounded shadow-sm border border-success">
+          <div class="mb-2">
+            <label class="form-label fw-bold small text-muted mb-1">標題</label>
+            <input type="text" class="form-control form-control-sm" v-model="formBulletin.title" placeholder="輸入筆記標題">
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-bold small text-muted mb-1">內容</label>
+            <textarea class="form-control form-control-sm" rows="3" v-model="formBulletin.content" placeholder="輸入筆記內容..."></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-muted mb-1">網址連結 (複數網址請按 Enter 換行輸入)</label>
+            <textarea class="form-control form-control-sm" rows="2" v-model="formBulletin.urlsText" placeholder="https://..."></textarea>
+          </div>
+          <div class="text-end">
+            <button class="btn btn-outline-secondary btn-sm me-2 fw-bold" @click="showBulletinForm = false" :disabled="isSaving">取消</button>
+            <button class="btn btn-success btn-sm fw-bold" @click="saveBulletin" :disabled="isSaving">
+              <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span>💾 儲存
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body" v-else>
+        <div class="row g-3">
+          <div class="col-md-6 col-lg-4" v-for="item in bulletins" :key="item.id">
+            <div class="card h-100 border-0 shadow-sm">
+              <div class="card-body p-3 d-flex flex-column">
+                <h6 class="fw-bold text-dark border-bottom pb-2 mb-2">{{ item.title }}</h6>
+                <p class="text-muted small mb-3" style="white-space: pre-wrap; font-size: 0.85rem; flex-grow: 1;">{{ item.content }}</p>
+                <div v-if="item.urls && item.urls.length > 0" class="d-flex flex-column gap-1 mb-2">
+                  <a v-for="(url, idx) in item.urls" :key="idx" :href="url" target="_blank" class="badge bg-primary text-decoration-none text-start text-truncate py-2 px-2" style="max-width: 100%;">
+                    🔗 {{ url }}
+                  </a>
+                </div>
+              </div>
+              <div class="card-footer bg-white border-top-0 pt-0 text-end">
+                <button class="btn btn-light btn-sm text-primary fw-bold me-2 px-2 py-0" @click="editBulletin(item)">編輯</button>
+                <button class="btn btn-light btn-sm text-danger fw-bold px-2 py-0" @click="deleteBulletin(item.id)">刪除</button>
+              </div>
+            </div>
+          </div>
+          <div v-if="bulletins.length === 0" class="col-12 text-center text-muted small py-3">
+            目前無任何佈告筆記，請點擊右上方按鈕新增。
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="errorMsg" class="alert alert-danger text-center shadow-sm fw-bold my-4">
         ❌ 系統錯誤：{{ errorMsg }}
     </div>
@@ -130,6 +196,91 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 
+// =====================================
+// 佈告欄筆記功能邏輯 (API 資料庫版)
+// =====================================
+const bulletins = ref([]);
+const showBulletinForm = ref(false);
+const isEditing = ref(false);
+const formBulletin = ref({ id: null, title: '', content: '', urlsText: '' });
+const isSaving = ref(false);
+
+const loadBulletins = async () => {
+    try {
+        const res = await $fetch('/api/bulletins');
+        if (res && res.success) {
+            bulletins.value = res.data;
+        }
+    } catch (e) {
+        console.error('讀取佈告欄失敗', e);
+    }
+};
+
+const openBulletinModal = () => {
+    isEditing.value = false;
+    formBulletin.value = { id: null, title: '', content: '', urlsText: '' };
+    showBulletinForm.value = true;
+};
+
+const editBulletin = (item) => {
+    isEditing.value = true;
+    formBulletin.value = { 
+        id: item.id, 
+        title: item.title, 
+        content: item.content, 
+        urlsText: item.urls ? item.urls.join('\n') : '' 
+    };
+    showBulletinForm.value = true;
+};
+
+const saveBulletin = async () => {
+    if (!formBulletin.value.title) {
+        alert('筆記標題為必填項目！'); return;
+    }
+    isSaving.value = true;
+    const urls = formBulletin.value.urlsText.split('\n').map(u => u.trim()).filter(u => u !== '');
+    const payload = {
+        id: formBulletin.value.id, 
+        title: formBulletin.value.title, 
+        content: formBulletin.value.content, 
+        urls: urls
+    };
+
+    try {
+        const res = await $fetch('/api/bulletins', {
+            method: 'POST',
+            body: payload
+        });
+        if (res.success) {
+            await loadBulletins();
+            showBulletinForm.value = false;
+        } else {
+            alert('儲存失敗：' + res.message);
+        }
+    } catch (e) {
+        alert('儲存發生錯誤，請確定已建立 bulletins 資料表及 API。');
+    } finally {
+        isSaving.value = false;
+    }
+};
+
+const deleteBulletin = async (id) => {
+    if(!confirm('確定要刪除這則筆記嗎？')) return;
+    try {
+        const res = await $fetch(`/api/bulletins?id=${id}`, { method: 'DELETE' });
+        if (res.success) {
+            bulletins.value = bulletins.value.filter(b => b.id !== id);
+        } else {
+            alert('刪除失敗：' + res.message);
+        }
+    } catch (e) {
+        alert('刪除發生錯誤');
+    }
+};
+
+// =====================================
+// 台股指標核心邏輯
+// =====================================
 const isLoading = ref(true);
 const errorMsg = ref('');
 const taiexData = ref(null);
@@ -138,13 +289,11 @@ const currentPeriod = ref('daily');
 let chartInstance = null;
 let theoryChartInstance = null;
 
-// 淨化資料
 const sanitize = (q) => {
     if (!q || !Array.isArray(q)) return [];
     return q.filter(x => x.open != null && x.close != null && !isNaN(x.close));
 };
 
-// 計算 KD
 const calcKD = (q) => {
     let k=50, d=50;
     return q.map((x, i, a) => {
@@ -156,10 +305,8 @@ const calcKD = (q) => {
     });
 };
 
-// 計算均線
 const calcMA = (n, q) => q.map((_, i, a) => i < n-1 ? null : a.slice(i-n+1, i+1).reduce((s, x)=>s+x.close,0)/n);
 
-// 尋找最後一次交叉點
 const findCross = (kd) => {
     if (!kd || kd.length < 2) return null;
     for(let i = kd.length-1; i>0; i--) {
@@ -171,7 +318,6 @@ const findCross = (kd) => {
     } return null;
 };
 
-// 計算交叉次數
 const countCross = (kd, periodStr) => {
     if (!kd || kd.length < 2) return 0;
     let cnt = 0;
@@ -190,7 +336,6 @@ const countCross = (kd, periodStr) => {
     } return cnt;
 };
 
-// 取得扣抵資訊
 const getDeduction = (dailyData, latestClose, n) => {
     if (!dailyData || dailyData.length === 0) return { price: 0, diff: 0, isSafe: true, date: '--' };
     const idx = Math.max(0, dailyData.length - n);
@@ -198,8 +343,10 @@ const getDeduction = (dailyData, latestClose, n) => {
     return { date: target.date, price: target.close || 0, diff: latestClose - (target.close || 0), isSafe: latestClose >= (target.close || 0) };
 };
 
-// 生命週期：組件掛載時執行
 onMounted(async () => {
+    // 載入佈告欄資料庫資料
+    await loadBulletins();
+
     try {
         const res = await $fetch('/api/taiex');
         if (!res || !res.success) throw new Error(res?.message || '資料獲取失敗');
@@ -254,7 +401,6 @@ onMounted(async () => {
             }
         };
 
-        // 等待 DOM 更新後繪製圖表
         nextTick(() => {
             let checkCount = 0;
             const checkEcharts = setInterval(() => {
@@ -278,7 +424,6 @@ onMounted(async () => {
     }
 });
 
-// 🔥 重新設計的十年週期規律圖 (尾數2起漲 / 尾數5起漲 / 尾數7起跌 / 尾數8起漲 / 尾數0起跌)
 function drawTheoryDiagram() {
     const dom = document.getElementById('theoryDiagram');
     if(!dom || !window.echarts) return;
@@ -291,7 +436,6 @@ function drawTheoryDiagram() {
         tooltip: { trigger: 'axis', formatter: '{b}' },
         xAxis: { 
             type: 'category', 
-            // 完美對應附圖與最新修正的西元年尾數 (7, 0 起跌)
             data: ['尾數 2\n年底起漲', '過渡波', '尾數 5\n年底起漲', '尾數 7\n年中起跌', '尾數 8\n年底起漲', '尾數 0\n年中起跌', '空頭落底', '尾數 2\n年底起漲'], 
             axisLine: { show: true, lineStyle: { color: '#ccc' } }, 
             axisLabel: { fontSize: 11, interval: 0, fontWeight: 'bold', color: '#555' } 
@@ -299,7 +443,7 @@ function drawTheoryDiagram() {
         yAxis: { show: false, min: 0, max: 110 },
         series: [{
             type: 'line', smooth: true, symbolSize: 6, lineStyle: { width: 3, color: '#0d6efd' },
-            data: [20, 60, 40, 90, 60, 100, 30, 20], // 高低點趨勢數值模擬
+            data: [20, 60, 40, 90, 60, 100, 30, 20],
             markPoint: { 
                 symbolSize: 45,
                 data: [
