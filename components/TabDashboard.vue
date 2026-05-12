@@ -7,12 +7,20 @@
                 <h6 class="text-uppercase text-muted fw-bold" style="font-size: 0.8rem;">目前數據來源</h6>
                 <span class="badge bg-primary fs-6 text-wrap">{{ dataSourceDisplay }}</span>
             </div>
-            <div class="col-md-4 mb-3 mb-md-0 border-start border-end">
+            
+            <div class="col-md-4 mb-3 mb-md-0 border-start border-end px-3">
+                <div class="input-group input-group-sm mb-2">
+                    <span class="input-group-text bg-light fw-bold">伺服器</span>
+                    <select class="form-select text-center fw-bold text-secondary" v-model="selectedHfAccount" :disabled="isSyncing">
+                        <option v-for="acc in hfAccounts" :key="acc.value" :value="acc.value">{{ acc.label }}</option>
+                    </select>
+                </div>
                 <button class="btn btn-outline-danger w-100 fw-bold" @click="triggerSync" :disabled="isSyncing">
                     <span v-if="isSyncing" class="spinner-border spinner-border-sm me-1"></span>
-                    {{ isSyncing ? '執行中...' : '🔄 啟動雲端爬蟲 (API)' }}
+                    {{ syncStatusText }}
                 </button>
             </div>
+
             <div class="col-md-4">
                 <button class="btn btn-outline-success w-100 fw-bold" data-bs-toggle="collapse" data-bs-target="#uploadBox">📤 手動上傳 JSON</button>
             </div>
@@ -21,7 +29,10 @@
             <div class="card card-body bg-light border-0">
                 <div class="d-flex gap-2 justify-content-center">
                     <input type="file" @change="handleFileSelect" class="form-control w-75" accept=".json">
-                    <button @click="uploadToServer" class="btn btn-success fw-bold" :disabled="!selectedFile || isUploading">確認上傳</button>
+                    <button @click="uploadToServer" class="btn btn-success fw-bold" :disabled="!selectedFile || isUploading">
+                        <span v-if="isUploading" class="spinner-border spinner-border-sm me-1"></span>
+                        {{ isUploading ? '上傳中...' : '確認上傳' }}
+                    </button>
                 </div>
             </div>
         </div>
@@ -29,7 +40,10 @@
         <div class="row align-items-center g-3 text-center">
             <div class="col-md-3 text-md-end"><span class="fw-bold text-secondary">🔗 外部系統聯動：</span></div>
             <div class="col-md-4">
-                <button class="btn btn-dark w-100 fw-bold shadow-sm" @click="triggerTwstockSync" :disabled="isSyncingTwstock">🚀 獨立更新 Twstock168</button>
+                <button class="btn btn-dark w-100 fw-bold shadow-sm" @click="triggerTwstockSync" :disabled="isSyncingTwstock">
+                    <span v-if="isSyncingTwstock" class="spinner-border spinner-border-sm me-1"></span>
+                    {{ isSyncingTwstock ? '更新中...' : '🚀 獨立更新 Twstock168' }}
+                </button>
             </div>
             <div class="col-md-5">
                 <a href="https://www.macromicro.me/collections/46/tw-stock-relative/110457/tw-tmf-long-to-short-ratio-of-individual-player" target="_blank" class="btn btn-danger w-100 fw-bold shadow-sm">🔥 微台散戶多空比 (M平方)</a>
@@ -218,22 +232,63 @@ onMounted(async () => {
     } finally { isLoading.value = false; }
 });
 
+// =====================================
+// 🔥 HF 帳號選項與同步邏輯 (新增)
+// =====================================
+const hfAccounts = [
+    { label: '自動隨機 (備援)', value: 'auto' },
+    { label: '帳號1 (pyfbsdk59)', value: 'https://pyfbsdk59-macrowave-scrape-api.hf.space' },
+    { label: '帳號2 (lawxstudents)', value: 'https://lawxstudents168-macrowave-scrape-api.hf.space' },
+    { label: '帳號3 (igveri59)', value: 'https://igveri59-macrowave-scrape-api.hf.space' }
+];
+
+const selectedHfAccount = ref('auto');
+const syncStatusText = ref('🔄 啟動雲端爬蟲 (API)');
 const isSyncing = ref(false);
+
 const triggerSync = async () => {
     if (!confirm('確定啟動雲端爬蟲？')) return;
     isSyncing.value = true;
-    const hfBaseUrls = ['https://pyfbsdk59-macrowave-scrape-api.hf.space','https://lawxstudents168-macrowave-scrape-api.hf.space','https://igveri59-macrowave-scrape-api.hf.space'];
-    for (let url of [...hfBaseUrls].sort(() => 0.5 - Math.random())) {
+
+    // 決定要測試的網址陣列
+    let urlsToTry = [];
+    if (selectedHfAccount.value === 'auto') {
+        // 如果是自動，提取出所有真實網址並打亂順序
+        const allUrls = hfAccounts.filter(a => a.value !== 'auto').map(a => a.value);
+        urlsToTry = [...allUrls].sort(() => 0.5 - Math.random());
+    } else {
+        // 如果有指定帳號，就只打指定的那個
+        urlsToTry = [selectedHfAccount.value];
+    }
+
+    let success = false;
+    for (let url of urlsToTry) {
+        // 抓出正在嘗試的帳號名稱 (例如: pyfbsdk59)
+        const accName = hfAccounts.find(a => a.value === url)?.label.split(' ')[1] || '伺服器';
+        syncStatusText.value = `嘗試中: ${accName}...`;
+        
         try {
             await $fetch(`${url}/api/trigger-sync`, { method: 'POST', timeout: 15000 });
-            alert('指令發送成功，約3分鐘後自動更新。');
+            alert(`✅ 指令已成功發送至 ${accName}！約 3 分鐘後將自動更新頁面。`);
             setTimeout(() => window.location.reload(), 180000);
+            success = true;
             break;
-        } catch (e) { }
+        } catch (e) {
+            console.warn(`[${accName}] 無回應或逾時`);
+        }
     }
+
+    if (!success) {
+        alert('❌ 所選的伺服器皆無回應，可能是 Hugging Face 正在休眠，請稍後再試。');
+    }
+
     isSyncing.value = false;
+    syncStatusText.value = '🔄 啟動雲端爬蟲 (API)';
 };
 
+// =====================================
+// 其他功能
+// =====================================
 const isSyncingTwstock = ref(false);
 const triggerTwstockSync = async () => {
     isSyncingTwstock.value = true;
