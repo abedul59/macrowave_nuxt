@@ -6,20 +6,25 @@
     </div>
 
     <div class="container mb-4">
-      <ul class="nav nav-tabs nav-fill fw-bold fs-5 shadow-sm bg-white rounded-top">
+      <ul class="nav nav-tabs nav-fill fw-bold fs-6 shadow-sm bg-white rounded-top flex-column flex-md-row">
         <li class="nav-item">
           <button :class="['nav-link py-3', { active: activeTab === 'macro' }]" @click="activeTab = 'macro'">
-            🌍 總經戰情儀表板
+            🌍 總經戰情
           </button>
         </li>
         <li class="nav-item">
           <button :class="['nav-link py-3', { active: activeTab === 'taiex' }]" @click="activeTab = 'taiex'">
-            📈 台股分析 (傳統極值)
+            📈 傳統極值
           </button>
         </li>
         <li class="nav-item">
-          <button :class="['nav-link py-3 text-primary', { active: activeTab === 'dynamic' }]" @click="activeTab = 'dynamic'">
-            🚀 台股分析 (十年週期動態極值)
+          <button :class="['nav-link py-3', { active: activeTab === 'dynamic' }]" @click="activeTab = 'dynamic'">
+            🚀 動態極值與十年週期
+          </button>
+        </li>
+        <li class="nav-item">
+          <button :class="['nav-link py-3 text-success', { active: activeTab === 'history' }]" @click="activeTab = 'history'">
+            ⏳ 歷史交叉統計回測
           </button>
         </li>
       </ul>
@@ -37,23 +42,25 @@
 import { ref, computed } from 'vue'
 import { useHead } from '#imports'
 
-// 🔥 核心修復：強制手動匯入三個分頁檔案，徹底避開 Nuxt 找不到檔案的問題
+// 強制手動匯入四個分頁檔案
 import TabDashboard from '../components/TabDashboard.vue'
 import TabTaiexTraditional from '../components/TabTaiexTraditional.vue'
 import TabTaiexDynamic from '../components/TabTaiexDynamic.vue'
+import TabTaiexHistory from '../components/TabTaiexHistory.vue'
 
 // 全局引入 ECharts 套件
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
 
-// 控制目前顯示的分頁 (預設顯示總經儀表板)
+// 控制目前顯示的分頁
 const activeTab = ref('macro')
 
-// 根據點擊的分頁，動態回傳對應的組件
+// 動態回傳對應的組件
 const currentTabComponent = computed(() => {
   switch (activeTab.value) {
     case 'macro': return TabDashboard
     case 'taiex': return TabTaiexTraditional
     case 'dynamic': return TabTaiexDynamic
+    case 'history': return TabTaiexHistory
     default: return TabDashboard
   }
 })
