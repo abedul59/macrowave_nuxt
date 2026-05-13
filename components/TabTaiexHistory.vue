@@ -5,8 +5,8 @@
       <div class="card-body">
         <h5 class="fw-bold text-success mb-3">⏳ 台股歷史週 KD 轉折大數據回測</h5>
         <p class="text-muted small mb-3">
-          本系統自動掃描歷史最遠端至 2026 年的每一次真實週 KD 交叉。當發生「死亡交叉」時，結算前一波多頭上漲空間；發生「黃金交叉」時，結算前一波空頭下跌空間。您可點開每一年份，進一步查看當年的完整週 K 線圖與交叉標記。<br>
-          <span class="text-danger">※ 註：歷史數據起點依 Yahoo API 實際提供年份為準。</span>
+          本系統自動掃描歷史最遠端至目前的每一次真實週 KD 交叉。當發生轉折時，結算前一波的<strong>「漲跌空間」</strong>與<strong>「交易天數」</strong>。您可展開每一年份，並自由切換「週 K 線 (看大趨勢)」或「日 K 線 (看均線防守)」。<br>
+          <span class="text-danger">※ 註：歷史數據起點依 Yahoo API 實際提供年份為準 (台股約從 1997 年起算)。</span>
         </p>
         
         <div class="d-flex flex-wrap gap-2">
@@ -20,7 +20,7 @@
     </div>
 
     <div v-if="isLoading" class="text-center my-5">
-      <div class="spinner-border text-success"></div><p class="mt-2 fw-bold text-success">歷史大數據解析與圖表構建中...</p>
+      <div class="spinner-border text-success"></div><p class="mt-2 fw-bold text-success">歷史大數據解析、交易日精算與圖表構建中...</p>
     </div>
 
     <div v-if="errorMsg" class="alert alert-danger fw-bold text-center">
@@ -63,19 +63,26 @@
           <div :id="'collapse' + yearData.year" class="accordion-collapse collapse" data-bs-parent="#historyAccordion">
             <div class="accordion-body bg-light p-3">
                 
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                     <h6 class="fw-bold text-dark mb-0">📌 本年度轉折明細</h6>
-                    <button class="btn btn-outline-primary btn-sm fw-bold shadow-sm" @click="toggleYearChart(yearData.year)">
-                        {{ activeChartYear === yearData.year ? '收合圖表 🔼' : '📊 展開本年度週 K 線圖 🔽' }}
-                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="btn-group shadow-sm" v-if="activeChartYear === yearData.year">
+                            <button :class="['btn btn-sm fw-bold', chartPeriodType === 'daily' ? 'btn-primary' : 'btn-outline-primary']" @click="changeChartPeriod('daily', yearData.year)">日 K 線 (含均線)</button>
+                            <button :class="['btn btn-sm fw-bold', chartPeriodType === 'weekly' ? 'btn-primary' : 'btn-outline-primary']" @click="changeChartPeriod('weekly', yearData.year)">週 K 線</button>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm fw-bold shadow-sm" @click="toggleYearChart(yearData.year)">
+                            {{ activeChartYear === yearData.year ? '收合圖表 🔼' : '📊 展開本年度 K 線圖 🔽' }}
+                        </button>
+                    </div>
                 </div>
 
                 <div v-show="activeChartYear === yearData.year" class="card shadow-sm border-primary mb-4 overflow-hidden">
-                    <div class="card-header bg-primary text-white py-2 fw-bold text-center">
-                        {{ yearData.year }} 年台股週線與 KD 走勢圖
+                    <div class="card-header bg-primary text-white py-2 fw-bold text-center d-flex justify-content-between">
+                        <span>{{ yearData.year }} 年台股走勢圖</span>
+                        <span class="badge bg-white text-primary">{{ chartPeriodType === 'daily' ? '日線模式' : '週線模式' }}</span>
                     </div>
                     <div class="card-body bg-white p-2">
-                        <div :id="'chart-year-' + yearData.year" style="width: 100%; height: 450px;"></div>
+                        <div :id="'chart-year-' + yearData.year" style="width: 100%; height: 500px;"></div>
                     </div>
                 </div>
 
@@ -86,6 +93,7 @@
                                 <th>交叉日期</th>
                                 <th>轉折類型</th>
                                 <th>當時指數</th>
+                                <th>前波段交易天數</th>
                                 <th>前波段空間結算</th>
                             </tr>
                         </thead>
@@ -97,6 +105,9 @@
                                     <span v-else class="badge bg-success rounded-pill px-3 py-2">❄️ 死亡交叉 (起跌)</span>
                                 </td>
                                 <td class="fw-bold">{{ cross.price.toFixed(0) }}</td>
+                                <td>
+                                    <span class="fw-bold text-dark">{{ cross.tradingDays > 0 ? cross.tradingDays + ' 天' : '--' }}</span>
+                                </td>
                                 <td>
                                     <span v-if="cross.change > 0" class="fw-bold text-danger">📈 上漲 {{ cross.change.toFixed(0) }} 點</span>
                                     <span v-else-if="cross.change < 0" class="fw-bold text-success">📉 下跌 {{ Math.abs(cross.change).toFixed(0) }} 點</span>
@@ -127,11 +138,14 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 const isLoading = ref(true);
 const errorMsg = ref('');
 const rawCrosses = ref([]);
-const fullWeeklyData = ref([]); // 🔥 儲存所有的週線原始數據，以供繪圖使用
-const activeDecade = ref('2020');
 
-// 控制目前展開的圖表年份
+// 儲存原始資料供圖表切換使用
+const fullWeeklyData = ref([]); 
+const fullDailyData = ref([]);
+
+const activeDecade = ref('2020');
 const activeChartYear = ref(null);
+const chartPeriodType = ref('weekly'); // 控制圖表顯示日線或週線
 let chartInstanceMap = {};
 
 // 定義可選的年代
@@ -164,20 +178,32 @@ const calcKD = (q) => {
     });
 };
 
+// 計算均線 (供日K線圖使用)
+const calcMA = (n, q) => q.map((_, i, a) => i < n-1 ? null : a.slice(i-n+1, i+1).reduce((s, x)=>s+x.close,0)/n);
+
 onMounted(async () => {
     try {
         const res = await $fetch('/api/taiex');
         if (!res || !res.success) throw new Error(res?.message || '資料獲取失敗');
         
         const safeWeekly = sanitize(res.data.weekly);
-        if (safeWeekly.length === 0) throw new Error('API 傳回的週線數據為空');
+        const safeDaily = sanitize(res.data.daily); // 取得日線資料計算交易天數
 
+        if (safeWeekly.length === 0 || safeDaily.length === 0) throw new Error('API 傳回的數據為空');
+
+        // 計算 KD 並儲存全域變數供畫圖使用
         const weeklyKD = calcKD(safeWeekly);
-        fullWeeklyData.value = weeklyKD; // 保存完整數據供繪圖
+        const dailyKD = calcKD(safeDaily);
+        fullWeeklyData.value = weeklyKD;
+        fullDailyData.value = dailyKD;
+
+        // 提取日線的日期陣列，用於精算交易天數
+        const dailyDateArray = safeDaily.map(d => d.date);
 
         const crosses = [];
         let lastCrossPrice = null;
         let lastCrossType = null;
+        let lastCrossDate = null; // 記錄上一次交叉的日期
 
         for (let i = 1; i < weeklyKD.length; i++) {
             const p = weeklyKD[i-1], c = weeklyKD[i];
@@ -190,9 +216,12 @@ onMounted(async () => {
             if (crossType && crossType !== lastCrossType) {
                 const year = new Date(c.date).getFullYear();
                 let pointChange = 0;
+                let tradingDays = 0;
                 
-                if (lastCrossPrice !== null) {
+                if (lastCrossPrice !== null && lastCrossDate !== null) {
                     pointChange = c.close - lastCrossPrice;
+                    // 🔥 精算交易天數：計算在 lastCrossDate 與 c.date 之間，存在於日線資料的總天數
+                    tradingDays = dailyDateArray.filter(d => d > lastCrossDate && d <= c.date).length;
                 }
 
                 crosses.push({
@@ -200,11 +229,13 @@ onMounted(async () => {
                     year: year,
                     type: crossType,
                     price: c.close,
-                    change: pointChange
+                    change: pointChange,
+                    tradingDays: tradingDays
                 });
 
                 lastCrossPrice = c.close;
                 lastCrossType = crossType;
+                lastCrossDate = c.date;
             }
         }
         
@@ -274,17 +305,28 @@ const getDecadeWorstWave = (decade) => {
 };
 
 // ==========================================
-// 🔥 繪製特定年份 K 線圖邏輯
+// 🔥 圖表繪製與切換邏輯
 // ==========================================
+
+const changeChartPeriod = async (type, year) => {
+    chartPeriodType.value = type;
+    await nextTick();
+    renderYearChart(year);
+};
+
 const toggleYearChart = async (year) => {
     if (activeChartYear.value === year) {
-        activeChartYear.value = null; // 點擊第二次收合
+        activeChartYear.value = null; 
         return;
     }
     
     activeChartYear.value = year;
-    await nextTick(); // 等待 Vue 展開 DOM
-    
+    chartPeriodType.value = 'weekly'; // 預設展開時顯示週線
+    await nextTick();
+    renderYearChart(year);
+};
+
+const renderYearChart = (year) => {
     const domId = 'chart-year-' + year;
     const dom = document.getElementById(domId);
     
@@ -293,8 +335,11 @@ const toggleYearChart = async (year) => {
         return;
     }
 
-    // 篩選當年度的完整週線資料
-    const yearData = fullWeeklyData.value.filter(d => d.date.startsWith(year.toString()));
+    const isDaily = chartPeriodType.value === 'daily';
+    const sourceData = isDaily ? fullDailyData.value : fullWeeklyData.value;
+    
+    // 篩選當年度資料
+    const yearData = sourceData.filter(d => d.date.startsWith(year.toString()));
     if (yearData.length === 0) return;
 
     const categoryData = yearData.map(item => item.date);
@@ -305,6 +350,10 @@ const toggleYearChart = async (year) => {
     }));
     const kData = yearData.map(item => item.k);
     const dData = yearData.map(item => item.d);
+
+    // 針對日線計算均線
+    const ma20 = isDaily ? calcMA(20, yearData) : [];
+    const ma60 = isDaily ? calcMA(60, yearData) : [];
 
     // 標註當年的黃金/死亡交叉
     const kdMarks = [];
@@ -318,7 +367,6 @@ const toggleYearChart = async (year) => {
         }
     }
 
-    // 銷毀舊實例並初始化新實例
     if (chartInstanceMap[domId]) chartInstanceMap[domId].dispose();
     const inst = window.echarts.init(dom);
     chartInstanceMap[domId] = inst;
@@ -326,7 +374,10 @@ const toggleYearChart = async (year) => {
     inst.setOption({
         tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
         axisPointer: { link: [{ xAxisIndex: 'all' }] },
-        legend: { data: ['週 K線', '成交量', 'K值', 'D值'], top: 5 },
+        legend: { 
+            data: isDaily ? ['日 K線', '20MA', '60MA', '成交量', 'K值', 'D值'] : ['週 K線', '成交量', 'K值', 'D值'], 
+            top: 5 
+        },
         grid: [
             { left: '6%', right: '5%', top: '10%', height: '45%' },
             { left: '6%', right: '5%', top: '60%', height: '15%' },
@@ -342,9 +393,18 @@ const toggleYearChart = async (year) => {
             { scale: true, gridIndex: 1, axisLabel: { show: false } },
             { min: 0, max: 100, gridIndex: 2, splitLine: { show: true, lineStyle: { type: 'dashed' } } }
         ],
-        dataZoom: [{ type: 'inside', xAxisIndex: [0, 1, 2] }], // 支援滑鼠滾輪縮放
+        dataZoom: [{ type: 'inside', xAxisIndex: [0, 1, 2] }, { show: true, xAxisIndex: [0, 1, 2], top: '96%', height: 15 }], 
         series: [
-            { name: '週 K線', type: 'candlestick', data: candleValues, itemStyle: { color: '#dc3545', color0: '#198754', borderColor: '#dc3545', borderColor0: '#198754' } },
+            { 
+                name: isDaily ? '日 K線' : '週 K線', 
+                type: 'candlestick', 
+                data: candleValues, 
+                itemStyle: { color: '#dc3545', color0: '#198754', borderColor: '#dc3545', borderColor0: '#198754' } 
+            },
+            ...(isDaily ? [
+                { name: '20MA', type: 'line', data: ma20, smooth: true, symbol: 'none', lineStyle: { color: '#0dcaf0' } },
+                { name: '60MA', type: 'line', data: ma60, smooth: true, symbol: 'none', lineStyle: { color: '#ffc107' } }
+            ] : []),
             { name: '成交量', type: 'bar', data: volumeData, xAxisIndex: 1, yAxisIndex: 1 },
             { name: 'K值', type: 'line', data: kData, xAxisIndex: 2, yAxisIndex: 2, lineStyle: { color: '#dc3545' }, markPoint: { data: kdMarks, label: {show:false} } },
             { name: 'D值', type: 'line', data: dData, xAxisIndex: 2, yAxisIndex: 2, lineStyle: { color: '#0d6efd' } }
