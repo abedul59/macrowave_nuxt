@@ -5,7 +5,7 @@
       <div class="card-body">
         <h5 class="fw-bold text-success mb-3">⏳ 台股歷史週 KD 轉折大數據回測</h5>
         <p class="text-muted small mb-3">
-          本系統自動掃描歷史最遠端至目前的每一次真實週 KD 交叉。當發生轉折時，結算前一波的<strong>「漲跌空間」</strong>與<strong>「交易天數」</strong>。您可展開每一年份，並自由切換「週 K 線 (看大趨勢)」或「日 K 線 (看均線防守)」。<br>
+          本系統自動掃描歷史至目前的每一次真實週 KD 交叉。當發生轉折時，結算前一波的<strong>「漲跌空間」</strong>與<strong>「交易天數」</strong>，並自動對比當前年代的<strong>「平均動態極值」</strong>。您可展開每一年份，並自由切換「週 K 線 (看大趨勢)」或「日 K 線 (看均線防守)」。<br>
           <span class="text-danger">※ 註：歷史數據起點依 Yahoo API 實際提供年份為準 (台股約從 1997 年起算)。</span>
         </p>
         
@@ -20,7 +20,7 @@
     </div>
 
     <div v-if="isLoading" class="text-center my-5">
-      <div class="spinner-border text-success"></div><p class="mt-2 fw-bold text-success">歷史大數據解析、交易日精算與圖表構建中...</p>
+      <div class="spinner-border text-success"></div><p class="mt-2 fw-bold text-success">歷史大數據解析、交易日與動態極值精算中...</p>
     </div>
 
     <div v-if="errorMsg" class="alert alert-danger fw-bold text-center">
@@ -29,23 +29,32 @@
 
     <div v-if="!isLoading && groupedData[activeDecade]">
       
-      <div class="row mb-4">
-        <div class="col-md-4 mb-2">
-            <div class="card border-success h-100 shadow-sm text-center p-3">
-                <h6 class="text-muted fw-bold">本年代平均年交叉次數</h6>
-                <div class="fs-3 fw-bold text-success">{{ getDecadeAvgCrosses(activeDecade) }} <span class="fs-6">次/年</span></div>
+      <div class="row mb-4 g-2">
+        <div class="col-md-3">
+            <div class="card border-success h-100 shadow-sm text-center p-2">
+                <h6 class="text-muted fw-bold mb-1 small">年均交叉次數</h6>
+                <div class="fs-4 fw-bold text-success">{{ getDecadeAvgCrosses(activeDecade) }} <span class="fs-6">次</span></div>
             </div>
         </div>
-        <div class="col-md-4 mb-2">
-            <div class="card border-danger h-100 shadow-sm text-center p-3">
-                <h6 class="text-muted fw-bold">本年代最大多頭波段</h6>
-                <div class="fs-3 fw-bold text-danger">+{{ getDecadeBestWave(activeDecade) }} <span class="fs-6">點</span></div>
+        <div class="col-md-3">
+            <div class="card border-danger h-100 shadow-sm text-center p-2">
+                <h6 class="text-muted fw-bold mb-1 small">年代動態極值 (均漲)</h6>
+                <div class="fs-4 fw-bold text-danger">+{{ activeAvgUp.toFixed(0) }} <span class="fs-6">點</span></div>
             </div>
         </div>
-        <div class="col-md-4 mb-2">
-            <div class="card border-primary h-100 shadow-sm text-center p-3">
-                <h6 class="text-muted fw-bold">本年代最大空頭波段</h6>
-                <div class="fs-3 fw-bold text-primary">{{ getDecadeWorstWave(activeDecade) }} <span class="fs-6">點</span></div>
+        <div class="col-md-3">
+            <div class="card border-primary h-100 shadow-sm text-center p-2">
+                <h6 class="text-muted fw-bold mb-1 small">年代動態極值 (均跌)</h6>
+                <div class="fs-4 fw-bold text-primary">-{{ activeAvgDown.toFixed(0) }} <span class="fs-6">點</span></div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-dark h-100 shadow-sm text-center p-2">
+                <h6 class="text-muted fw-bold mb-1 small">最大波段 (漲 / 跌)</h6>
+                <div class="fs-5 fw-bold text-dark mt-1">
+                    <span class="text-danger">+{{ getDecadeBestWave(activeDecade) }}</span> / 
+                    <span class="text-success">{{ getDecadeWorstWave(activeDecade) }}</span>
+                </div>
             </div>
         </div>
       </div>
@@ -95,6 +104,7 @@
                                 <th>當時指數</th>
                                 <th>前波段交易天數</th>
                                 <th>前波段空間結算</th>
+                                <th>較年代極值 (均標)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -111,6 +121,21 @@
                                 <td>
                                     <span v-if="cross.change > 0" class="fw-bold text-danger">📈 上漲 {{ cross.change.toFixed(0) }} 點</span>
                                     <span v-else-if="cross.change < 0" class="fw-bold text-success">📉 下跌 {{ Math.abs(cross.change).toFixed(0) }} 點</span>
+                                    <span v-else class="text-muted">--</span>
+                                </td>
+                                <td>
+                                    <div v-if="cross.change > 0 && activeAvgUp > 0">
+                                        <span :class="cross.change > activeAvgUp ? 'text-danger fw-bold' : 'text-secondary'">
+                                            {{ cross.change >= activeAvgUp ? '+' : '' }}{{ (cross.change - activeAvgUp).toFixed(0) }} 點
+                                        </span>
+                                        <div class="text-muted mt-1" style="font-size: 0.75rem;">(達均標 {{ ((cross.change / activeAvgUp) * 100).toFixed(1) }}%)</div>
+                                    </div>
+                                    <div v-else-if="cross.change < 0 && activeAvgDown > 0">
+                                        <span :class="Math.abs(cross.change) > activeAvgDown ? 'text-success fw-bold' : 'text-secondary'">
+                                            {{ Math.abs(cross.change) >= activeAvgDown ? '+' : '' }}{{ (Math.abs(cross.change) - activeAvgDown).toFixed(0) }} 點
+                                        </span>
+                                        <div class="text-muted mt-1" style="font-size: 0.75rem;">(達均標 {{ ((Math.abs(cross.change) / activeAvgDown) * 100).toFixed(1) }}%)</div>
+                                    </div>
                                     <span v-else class="text-muted">--</span>
                                 </td>
                             </tr>
@@ -139,16 +164,14 @@ const isLoading = ref(true);
 const errorMsg = ref('');
 const rawCrosses = ref([]);
 
-// 儲存原始資料供圖表切換使用
 const fullWeeklyData = ref([]); 
 const fullDailyData = ref([]);
 
 const activeDecade = ref('2020');
 const activeChartYear = ref(null);
-const chartPeriodType = ref('weekly'); // 控制圖表顯示日線或週線
+const chartPeriodType = ref('weekly'); 
 let chartInstanceMap = {};
 
-// 定義可選的年代
 const availableDecades = [
     { id: '1980', label: '1980 - 1989' },
     { id: '1990', label: '1990 - 1999' },
@@ -157,13 +180,11 @@ const availableDecades = [
     { id: '2020', label: '2020 - 2026' }
 ];
 
-// 清洗資料
 const sanitize = (q) => {
     if (!q || !Array.isArray(q)) return [];
     return q.filter(x => x.open != null && x.close != null && !isNaN(x.close));
 };
 
-// 強化版計算 KD
 const calcKD = (q) => {
     let k=50, d=50;
     return q.map((x, i, a) => {
@@ -178,7 +199,6 @@ const calcKD = (q) => {
     });
 };
 
-// 計算均線 (供日K線圖使用)
 const calcMA = (n, q) => q.map((_, i, a) => i < n-1 ? null : a.slice(i-n+1, i+1).reduce((s, x)=>s+x.close,0)/n);
 
 onMounted(async () => {
@@ -187,23 +207,21 @@ onMounted(async () => {
         if (!res || !res.success) throw new Error(res?.message || '資料獲取失敗');
         
         const safeWeekly = sanitize(res.data.weekly);
-        const safeDaily = sanitize(res.data.daily); // 取得日線資料計算交易天數
+        const safeDaily = sanitize(res.data.daily);
 
         if (safeWeekly.length === 0 || safeDaily.length === 0) throw new Error('API 傳回的數據為空');
 
-        // 計算 KD 並儲存全域變數供畫圖使用
         const weeklyKD = calcKD(safeWeekly);
         const dailyKD = calcKD(safeDaily);
         fullWeeklyData.value = weeklyKD;
         fullDailyData.value = dailyKD;
 
-        // 提取日線的日期陣列，用於精算交易天數
         const dailyDateArray = safeDaily.map(d => d.date);
 
         const crosses = [];
         let lastCrossPrice = null;
         let lastCrossType = null;
-        let lastCrossDate = null; // 記錄上一次交叉的日期
+        let lastCrossDate = null;
 
         for (let i = 1; i < weeklyKD.length; i++) {
             const p = weeklyKD[i-1], c = weeklyKD[i];
@@ -220,7 +238,6 @@ onMounted(async () => {
                 
                 if (lastCrossPrice !== null && lastCrossDate !== null) {
                     pointChange = c.close - lastCrossPrice;
-                    // 🔥 精算交易天數：計算在 lastCrossDate 與 c.date 之間，存在於日線資料的總天數
                     tradingDays = dailyDateArray.filter(d => d > lastCrossDate && d <= c.date).length;
                 }
 
@@ -282,7 +299,27 @@ const groupedData = computed(() => {
     return groups;
 });
 
-// 統計函數
+// 🔥 新增：精算本年代平均多頭(漲點)與平均空頭(跌點)
+const activeAvgUp = computed(() => {
+    const data = groupedData.value[activeDecade.value];
+    if (!data) return 0;
+    let sum = 0, count = 0;
+    data.forEach(y => y.crosses.forEach(c => {
+        if (c.change > 0) { sum += c.change; count++; }
+    }));
+    return count ? sum / count : 0;
+});
+
+const activeAvgDown = computed(() => {
+    const data = groupedData.value[activeDecade.value];
+    if (!data) return 0;
+    let sum = 0, count = 0;
+    data.forEach(y => y.crosses.forEach(c => {
+        if (c.change < 0) { sum += Math.abs(c.change); count++; }
+    }));
+    return count ? sum / count : 0;
+});
+
 const getDecadeAvgCrosses = (decade) => {
     const data = groupedData.value[decade];
     if (!data || data.length === 0) return 0;
@@ -305,7 +342,7 @@ const getDecadeWorstWave = (decade) => {
 };
 
 // ==========================================
-// 🔥 圖表繪製與切換邏輯
+// 圖表繪製與切換邏輯
 // ==========================================
 
 const changeChartPeriod = async (type, year) => {
@@ -321,7 +358,7 @@ const toggleYearChart = async (year) => {
     }
     
     activeChartYear.value = year;
-    chartPeriodType.value = 'weekly'; // 預設展開時顯示週線
+    chartPeriodType.value = 'weekly';
     await nextTick();
     renderYearChart(year);
 };
@@ -338,7 +375,6 @@ const renderYearChart = (year) => {
     const isDaily = chartPeriodType.value === 'daily';
     const sourceData = isDaily ? fullDailyData.value : fullWeeklyData.value;
     
-    // 篩選當年度資料
     const yearData = sourceData.filter(d => d.date.startsWith(year.toString()));
     if (yearData.length === 0) return;
 
@@ -351,11 +387,9 @@ const renderYearChart = (year) => {
     const kData = yearData.map(item => item.k);
     const dData = yearData.map(item => item.d);
 
-    // 針對日線計算均線
     const ma20 = isDaily ? calcMA(20, yearData) : [];
     const ma60 = isDaily ? calcMA(60, yearData) : [];
 
-    // 標註當年的黃金/死亡交叉
     const kdMarks = [];
     for (let i = 1; i < yearData.length; i++) {
         const p = yearData[i - 1], c = yearData[i];
