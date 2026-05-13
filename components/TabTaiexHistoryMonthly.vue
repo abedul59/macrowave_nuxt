@@ -5,7 +5,7 @@
       <div class="card-body">
         <h5 class="fw-bold text-danger mb-3">⏳ 台股歷史「月 KD」長線轉折大數據回測</h5>
         <p class="text-muted small mb-3">
-          本系統自動掃描歷史至目前的每一次真實<strong>「月 KD」</strong>交叉。當發生長線轉折時，結算前一波的<strong>「漲跌空間」</strong>與<strong>「交易天數」</strong>，並自動對比當前年代的平均長波動態極值。您可展開每一年份，並自由切換「月 K 線 (看大趨勢)」或「日 K 線 (看均線防守)」。<br>
+          本系統自動掃描歷史至目前的每一次真實<strong>「月 KD」</strong>交叉。當發生長線轉折時，結算前一波的<strong>「漲跌空間」</strong>與<strong>「交易天數」</strong>，並自動對比當前年代的平均長波動態極值。<br>
           <span class="text-danger">※ 註：歷史數據起點依 Yahoo API 實際提供年份為準。月KD交叉次數較少，十年約6-8次。</span>
         </p>
         
@@ -33,7 +33,11 @@
         <div class="col-md-3">
             <div class="card border-success h-100 shadow-sm text-center p-2">
                 <h6 class="text-muted fw-bold mb-1 small">年代總交叉次數</h6>
-                <div class="fs-4 fw-bold text-success">{{ getDecadeTotalCrosses(activeDecade) }} <span class="fs-6">次</span></div>
+                <div class="fs-4 fw-bold text-success mb-1">{{ getDecadeTotalCrosses(activeDecade) }} <span class="fs-6">次</span></div>
+                <div class="mt-auto" style="font-size: 0.85rem;">
+                    <span class="badge bg-danger rounded-pill me-1">金叉 {{ getDecadeCrossCount(activeDecade, 'golden') }}</span>
+                    <span class="badge bg-success rounded-pill">死叉 {{ getDecadeCrossCount(activeDecade, 'death') }}</span>
+                </div>
             </div>
         </div>
         <div class="col-md-3">
@@ -57,6 +61,24 @@
                 </div>
             </div>
         </div>
+      </div>
+
+      <div class="card shadow-sm border-0 mb-4 bg-white border border-secondary">
+          <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <h6 class="fw-bold mb-0">📊 {{ activeDecade }} 年代完整 K 線走勢圖</h6>
+              <div class="d-flex align-items-center gap-2">
+                  <div class="btn-group shadow-sm" v-if="showDecadeChart">
+                      <button :class="['btn btn-sm fw-bold', decadeChartPeriodType === 'daily' ? 'btn-primary' : 'btn-outline-primary']" @click="changeDecadeChartPeriod('daily')">日 K 線 (含均線)</button>
+                      <button :class="['btn btn-sm fw-bold', decadeChartPeriodType === 'monthly' ? 'btn-primary' : 'btn-outline-primary']" @click="changeDecadeChartPeriod('monthly')">月 K 線</button>
+                  </div>
+                  <button class="btn btn-outline-light btn-sm fw-bold shadow-sm text-dark bg-white" @click="toggleDecadeChart()">
+                      {{ showDecadeChart ? '收合圖表 🔼' : '展開圖表 🔽' }}
+                  </button>
+              </div>
+          </div>
+          <div v-show="showDecadeChart" class="card-body p-2">
+              <div id="chart-decade-mo" style="width: 100%; height: 500px;"></div>
+          </div>
       </div>
 
       <div class="accordion shadow-sm" id="monthlyHistoryAccordion">
@@ -158,19 +180,30 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
 
 const isLoading = ref(true);
 const errorMsg = ref('');
 const rawCrosses = ref([]);
 
-const fullMonthlyData = ref([]); // 改存月線資料
+const fullMonthlyData = ref([]); 
 const fullDailyData = ref([]);
 
 const activeDecade = ref('2020');
 const activeChartYear = ref(null);
-const chartPeriodType = ref('monthly'); // 預設顯示月線圖
+const chartPeriodType = ref('monthly'); 
 let chartInstanceMap = {};
+
+// 十年代圖表狀態
+const showDecadeChart = ref(false);
+const decadeChartPeriodType = ref('monthly');
+
+// 當切換年代時，自動關閉十年圖表
+watch(activeDecade, () => {
+    if (showDecadeChart.value) {
+        showDecadeChart.value = false;
+    }
+});
 
 const availableDecades = [
     { id: '1980', label: '1980 - 1989' },
@@ -206,7 +239,7 @@ onMounted(async () => {
         const res = await $fetch('/api/taiex');
         if (!res || !res.success) throw new Error(res?.message || '資料獲取失敗');
         
-        const safeMonthly = sanitize(res.data.monthly); // 🔥 抓月線
+        const safeMonthly = sanitize(res.data.monthly); 
         const safeDaily = sanitize(res.data.daily);
 
         if (safeMonthly.length === 0 || safeDaily.length === 0) throw new Error('API 傳回的數據為空');
@@ -292,7 +325,6 @@ const groupedData = computed(() => {
     });
 
     Object.keys(groups).forEach(dec => {
-        // 月線交叉比較少，保留空年份也沒關係，但為了版面整潔，依然只顯示有發生交叉的年份
         groups[dec] = groups[dec].filter(g => g.crosses.length > 0);
         if (groups[dec].length === 0) delete groups[dec];
     });
@@ -300,7 +332,7 @@ const groupedData = computed(() => {
     return groups;
 });
 
-// 精算本年代平均多頭(漲點)與平均空頭(跌點)
+// 年代平均與極值計算
 const activeAvgUp = computed(() => {
     const data = groupedData.value[activeDecade.value];
     if (!data) return 0;
@@ -321,11 +353,21 @@ const activeAvgDown = computed(() => {
     return count ? sum / count : 0;
 });
 
-// 針對月 KD，顯示該年代的總交叉次數比較有意義
 const getDecadeTotalCrosses = (decade) => {
     const data = groupedData.value[decade];
     if (!data || data.length === 0) return 0;
     return data.reduce((sum, yData) => sum + yData.crosses.length, 0);
+};
+
+// 🔥 新增：專門計算該年代特定交叉(金叉/死叉)的次數
+const getDecadeCrossCount = (decade, type) => {
+    const data = groupedData.value[decade];
+    if (!data) return 0;
+    let cnt = 0;
+    data.forEach(y => {
+        cnt += y.crosses.filter(c => c.type === type).length;
+    });
+    return cnt;
 };
 
 const getDecadeBestWave = (decade) => {
@@ -345,7 +387,7 @@ const getDecadeWorstWave = (decade) => {
 };
 
 // ==========================================
-// 圖表繪製與切換邏輯
+// 圖表繪製與切換邏輯 (年份與十年共用)
 // ==========================================
 
 const changeChartPeriod = async (type, year) => {
@@ -361,13 +403,114 @@ const toggleYearChart = async (year) => {
     }
     
     activeChartYear.value = year;
-    chartPeriodType.value = 'monthly'; // 預設展開時顯示月線
+    chartPeriodType.value = 'monthly';
     await nextTick();
     renderYearChart(year);
 };
 
+// 🔥 新增：切換與展開十年圖表
+const toggleDecadeChart = async () => {
+    showDecadeChart.value = !showDecadeChart.value;
+    if(showDecadeChart.value) {
+        decadeChartPeriodType.value = 'monthly';
+        await nextTick();
+        renderDecadeChart();
+    }
+};
+
+const changeDecadeChartPeriod = async (type) => {
+    decadeChartPeriodType.value = type;
+    await nextTick();
+    renderDecadeChart();
+};
+
+const renderDecadeChart = () => {
+    const domId = 'chart-decade-mo';
+    const dom = document.getElementById(domId);
+    if (!dom || !window.echarts) return;
+
+    const isDaily = decadeChartPeriodType.value === 'daily';
+    const sourceData = isDaily ? fullDailyData.value : fullMonthlyData.value;
+    
+    // 篩選出整個年代 (例如 2020 ~ 2029)
+    const startYear = parseInt(activeDecade.value);
+    const endYear = startYear + 9;
+    const decData = sourceData.filter(d => {
+        const y = parseInt(d.date.substring(0, 4));
+        return y >= startYear && y <= endYear;
+    });
+
+    if (decData.length === 0) return;
+
+    const categoryData = decData.map(item => item.date);
+    const candleValues = decData.map(item => [item.open, item.close, item.low, item.high]);
+    const volumeData = decData.map(item => ({
+        value: item.volume || 0,
+        itemStyle: { color: item.close >= item.open ? '#dc3545' : '#198754' }
+    }));
+    const kData = decData.map(item => item.k);
+    const dData = decData.map(item => item.d);
+
+    const ma20 = isDaily ? calcMA(20, decData) : [];
+    const ma60 = isDaily ? calcMA(60, decData) : [];
+
+    const kdMarks = [];
+    for (let i = 1; i < decData.length; i++) {
+        const p = decData[i - 1], c = decData[i];
+        if (p.k <= p.d && c.k > c.d) {
+            kdMarks.push({ coord: [i, c.k], symbol: 'arrow', symbolSize: 12, itemStyle: { color: '#dc3545' }, value: '金叉' });
+        }
+        if (p.k >= p.d && c.k < c.d) {
+            kdMarks.push({ coord: [i, c.k], symbol: 'arrow', symbolRotate: 180, symbolSize: 12, itemStyle: { color: '#198754' }, value: '死叉' });
+        }
+    }
+
+    if (chartInstanceMap[domId]) chartInstanceMap[domId].dispose();
+    const inst = window.echarts.init(dom);
+    chartInstanceMap[domId] = inst;
+
+    inst.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+        axisPointer: { link: [{ xAxisIndex: 'all' }] },
+        legend: { 
+            data: isDaily ? ['日 K線', '20MA', '60MA', '成交量', 'K值', 'D值'] : ['月 K線', '成交量', 'K值', 'D值'], 
+            top: 5 
+        },
+        grid: [
+            { left: '6%', right: '5%', top: '10%', height: '45%' },
+            { left: '6%', right: '5%', top: '60%', height: '15%' },
+            { left: '6%', right: '5%', top: '80%', height: '15%' }
+        ],
+        xAxis: [
+            { type: 'category', data: categoryData, gridIndex: 0, axisLabel: { show: false } },
+            { type: 'category', data: categoryData, gridIndex: 1, axisLabel: { show: false } },
+            { type: 'category', data: categoryData, gridIndex: 2 }
+        ],
+        yAxis: [
+            { scale: true, gridIndex: 0 },
+            { scale: true, gridIndex: 1, axisLabel: { show: false } },
+            { min: 0, max: 100, gridIndex: 2, splitLine: { show: true, lineStyle: { type: 'dashed' } } }
+        ],
+        dataZoom: [{ type: 'inside', xAxisIndex: [0, 1, 2], start: 0, end: 100 }, { show: true, xAxisIndex: [0, 1, 2], top: '96%', height: 15 }], 
+        series: [
+            { 
+                name: isDaily ? '日 K線' : '月 K線', 
+                type: 'candlestick', 
+                data: candleValues, 
+                itemStyle: { color: '#dc3545', color0: '#198754', borderColor: '#dc3545', borderColor0: '#198754' } 
+            },
+            ...(isDaily ? [
+                { name: '20MA', type: 'line', data: ma20, smooth: true, symbol: 'none', lineStyle: { color: '#0dcaf0' } },
+                { name: '60MA', type: 'line', data: ma60, smooth: true, symbol: 'none', lineStyle: { color: '#ffc107' } }
+            ] : []),
+            { name: '成交量', type: 'bar', data: volumeData, xAxisIndex: 1, yAxisIndex: 1 },
+            { name: 'K值', type: 'line', data: kData, xAxisIndex: 2, yAxisIndex: 2, lineStyle: { color: '#dc3545' }, markPoint: { data: kdMarks, label: {show:false} } },
+            { name: 'D值', type: 'line', data: dData, xAxisIndex: 2, yAxisIndex: 2, lineStyle: { color: '#0d6efd' } }
+        ]
+    });
+};
+
 const renderYearChart = (year) => {
-    // 為了避免和週線組件 ID 衝突，加上 -mo- 區分
     const domId = 'chart-mo-year-' + year;
     const dom = document.getElementById(domId);
     
