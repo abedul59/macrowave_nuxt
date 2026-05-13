@@ -24,7 +24,12 @@
         </li>
         <li class="nav-item">
           <button :class="['nav-link py-3 text-success', { active: activeTab === 'history' }]" @click="activeTab = 'history'">
-            ⏳ 歷史交叉統計回測
+            ⏳ 週KD 歷史回測
+          </button>
+        </li>
+        <li class="nav-item">
+          <button :class="['nav-link py-3 text-danger', { active: activeTab === 'historyMonthly' }]" @click="activeTab = 'historyMonthly'">
+            ⏳ 月KD 歷史回測
           </button>
         </li>
       </ul>
@@ -42,11 +47,12 @@
 import { ref, computed } from 'vue'
 import { useHead } from '#imports'
 
-// 強制手動匯入四個分頁檔案
+// 強制手動匯入五個分頁檔案
 import TabDashboard from '../components/TabDashboard.vue'
 import TabTaiexTraditional from '../components/TabTaiexTraditional.vue'
 import TabTaiexDynamic from '../components/TabTaiexDynamic.vue'
 import TabTaiexHistory from '../components/TabTaiexHistory.vue'
+import TabTaiexHistoryMonthly from '../components/TabTaiexHistoryMonthly.vue' // 🔥 新增匯入
 
 // 全局引入 ECharts 套件
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
@@ -61,6 +67,7 @@ const currentTabComponent = computed(() => {
     case 'taiex': return TabTaiexTraditional
     case 'dynamic': return TabTaiexDynamic
     case 'history': return TabTaiexHistory
+    case 'historyMonthly': return TabTaiexHistoryMonthly // 🔥 對應新組件
     default: return TabDashboard
   }
 })
