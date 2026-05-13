@@ -5,8 +5,8 @@
       <div class="card-body">
         <h5 class="fw-bold text-success mb-3">⏳ 台股歷史週 KD 轉折大數據回測</h5>
         <p class="text-muted small mb-3">
-          本系統自動掃描從歷史最遠端至 2026 年 5 月的每一次週 KD 交叉。當發生「死亡交叉」時，結算前一波多頭上漲空間；發生「黃金交叉」時，結算前一波空頭下跌空間。藉此驗證每年是否平均發生 6-8 次交叉。<br>
-          <span class="text-danger">※ 註：歷史數據起點依 API 實際提供年份為準 (通常為 1997 或 2000 年起算)。</span>
+          本系統自動掃描從歷史最遠端至 2026 年的每一次真實週 KD 交叉。當發生「死亡交叉」時，結算前一波多頭上漲空間；發生「黃金交叉」時，結算前一波空頭下跌空間。藉此驗證每年是否平均發生 6-8 次交叉。<br>
+          <span class="text-danger">※ 註：歷史數據起點依 Yahoo API 實際提供年份為準 (台股約從 1997 年起算)。</span>
         </p>
         
         <div class="d-flex flex-wrap gap-2">
@@ -20,7 +20,7 @@
     </div>
 
     <div v-if="isLoading" class="text-center my-5">
-      <div class="spinner-border text-success"></div><p class="mt-2 fw-bold text-success">歷史數據解析與波段結算中...</p>
+      <div class="spinner-border text-success"></div><p class="mt-2 fw-bold text-success">歷史大數據解析與波段結算中...</p>
     </div>
 
     <div v-if="errorMsg" class="alert alert-danger fw-bold text-center">
@@ -53,9 +53,11 @@
       <div class="accordion shadow-sm" id="historyAccordion">
         <div class="accordion-item" v-for="yearData in groupedData[activeDecade]" :key="yearData.year">
           <h2 class="accordion-header" :id="'heading' + yearData.year">
-            <button class="accordion-button collapsed fw-bold fs-5 d-flex justify-content-between" type="button" data-bs-toggle="collapse" :data-bs-target="'#collapse' + yearData.year">
+            <button class="accordion-button collapsed fw-bold fs-5 d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" :data-bs-target="'#collapse' + yearData.year">
               <span>📅 {{ yearData.year }} 年</span>
-              <span class="badge ms-3 me-3" :class="yearData.crosses.length > 8 ? 'bg-danger' : 'bg-success'">總交叉: {{ yearData.crosses.length }} 次</span>
+              <span class="badge ms-3 me-3" :class="yearData.crosses.length >= 6 && yearData.crosses.length <= 8 ? 'bg-success' : 'bg-warning text-dark'">
+                  全年交叉: {{ yearData.crosses.length }} 次
+              </span>
             </button>
           </h2>
           <div :id="'collapse' + yearData.year" class="accordion-collapse collapse" data-bs-parent="#historyAccordion">
@@ -95,7 +97,7 @@
     </div>
     
     <div v-if="!isLoading && !groupedData[activeDecade]" class="text-center my-5 text-muted fw-bold">
-        該年代無 API 歷史數據。
+        該年代無 API 歷史數據 (或尚未載入)。
     </div>
 
   </div>
@@ -124,7 +126,7 @@ const sanitize = (q) => {
     return q.filter(x => x.open != null && x.close != null && !isNaN(x.close));
 };
 
-// 計算 KD
+// 強化版計算 KD (加入 high === low 的防呆保護)
 const calcKD = (q) => {
     let k=50, d=50;
     return q.map((x, i, a) => {
@@ -132,8 +134,10 @@ const calcKD = (q) => {
         const r = a.slice(i-8, i+1);
         const h = Math.max(...r.map(v=>v.high));
         const l = Math.min(...r.map(v=>v.low));
-        let rsv = h===l ? 0 : ((x.close-l)/(h-l))*100;
-        k = (rsv+k*2)/3; d = (k+d*2)/3;
+        // 防呆：若單週無波動(高低相同)，RSV 設為中值 50 避免 NaN
+        let rsv = h === l ? 50 : ((x.close-l)/(h-l))*100;
+        k = (rsv + k*2)/3; 
+        d = (k + d*2)/3;
         return {...x, k, d};
     });
 };
@@ -151,7 +155,6 @@ onMounted(async () => {
         let lastCrossPrice = null;
         let lastCrossType = null;
 
-        // 從最舊的資料開始往最新找，才能計算每次結算的漲跌幅
         for (let i = 1; i < weeklyKD.length; i++) {
             const p = weeklyKD[i-1], c = weeklyKD[i];
             if (p.k == null || p.d == null || c.k == null || c.d == null) continue;
@@ -160,12 +163,11 @@ onMounted(async () => {
             if (p.k <= p.d && c.k > c.d) crossType = 'golden';
             if (p.k >= p.d && c.k < c.d) crossType = 'death';
 
-            if (crossType) {
+            // 確保不會連續記錄相同的交叉類型 (過濾雜訊)
+            if (crossType && crossType !== lastCrossType) {
                 const year = new Date(c.date).getFullYear();
-                // 計算漲跌空間：
-                // 如果現在是死亡交叉，代表前面的波段是黃金交叉以來的多頭，計算這段多頭漲了多少。
-                // 如果現在是黃金交叉，代表前面的波段是死亡交叉以來的空頭，計算這段空頭跌了多少。
                 let pointChange = 0;
+                
                 if (lastCrossPrice !== null) {
                     pointChange = c.close - lastCrossPrice;
                 }
@@ -186,7 +188,6 @@ onMounted(async () => {
         // 反轉陣列，讓最新的交叉在最上面
         rawCrosses.value = crosses.reverse();
 
-        // 自動判斷第一筆資料落在哪個年代，並將 activeDecade 切換過去
         if (rawCrosses.value.length > 0) {
             const latestYear = rawCrosses.value[0].year;
             const decadeFloor = Math.floor(latestYear / 10) * 10;
@@ -204,16 +205,14 @@ onMounted(async () => {
 const groupedData = computed(() => {
     const groups = { '1980': [], '1990': [], '2000': [], '2010': [], '2020': [] };
     
-    // 初始化空結構
     Object.keys(groups).forEach(dec => {
         const start = parseInt(dec);
         for(let y = start + 9; y >= start; y--) {
-            if(y > 2026) continue; // 不超過 2026
+            if(y > 2026) continue;
             groups[dec].push({ year: y, crosses: [] });
         }
     });
 
-    // 填入資料
     rawCrosses.value.forEach(cross => {
         const decadeKey = (Math.floor(cross.year / 10) * 10).toString();
         if (groups[decadeKey]) {
@@ -222,7 +221,6 @@ const groupedData = computed(() => {
         }
     });
 
-    // 移除沒有交叉事件的空年份
     Object.keys(groups).forEach(dec => {
         groups[dec] = groups[dec].filter(g => g.crosses.length > 0);
         if (groups[dec].length === 0) delete groups[dec];
