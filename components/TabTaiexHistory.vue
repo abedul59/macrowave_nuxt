@@ -5,8 +5,8 @@
       <div class="card-body">
         <h5 class="fw-bold text-success mb-3">⏳ 台股歷史週 KD 轉折大數據回測</h5>
         <p class="text-muted small mb-3">
-          本系統自動掃描從歷史最遠端至 2026 年的每一次真實週 KD 交叉。當發生「死亡交叉」時，結算前一波多頭上漲空間；發生「黃金交叉」時，結算前一波空頭下跌空間。藉此驗證每年是否平均發生 6-8 次交叉。<br>
-          <span class="text-danger">※ 註：歷史數據起點依 Yahoo API 實際提供年份為準 (台股約從 1997 年起算)。</span>
+          本系統自動掃描歷史最遠端至 2026 年的每一次真實週 KD 交叉。當發生「死亡交叉」時，結算前一波多頭上漲空間；發生「黃金交叉」時，結算前一波空頭下跌空間。您可點開每一年份，進一步查看當年的完整週 K 線圖與交叉標記。<br>
+          <span class="text-danger">※ 註：歷史數據起點依 Yahoo API 實際提供年份為準。</span>
         </p>
         
         <div class="d-flex flex-wrap gap-2">
@@ -20,7 +20,7 @@
     </div>
 
     <div v-if="isLoading" class="text-center my-5">
-      <div class="spinner-border text-success"></div><p class="mt-2 fw-bold text-success">歷史大數據解析與波段結算中...</p>
+      <div class="spinner-border text-success"></div><p class="mt-2 fw-bold text-success">歷史大數據解析與圖表構建中...</p>
     </div>
 
     <div v-if="errorMsg" class="alert alert-danger fw-bold text-center">
@@ -61,8 +61,25 @@
             </button>
           </h2>
           <div :id="'collapse' + yearData.year" class="accordion-collapse collapse" data-bs-parent="#historyAccordion">
-            <div class="accordion-body p-0">
-                <div class="table-responsive">
+            <div class="accordion-body bg-light p-3">
+                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold text-dark mb-0">📌 本年度轉折明細</h6>
+                    <button class="btn btn-outline-primary btn-sm fw-bold shadow-sm" @click="toggleYearChart(yearData.year)">
+                        {{ activeChartYear === yearData.year ? '收合圖表 🔼' : '📊 展開本年度週 K 線圖 🔽' }}
+                    </button>
+                </div>
+
+                <div v-show="activeChartYear === yearData.year" class="card shadow-sm border-primary mb-4 overflow-hidden">
+                    <div class="card-header bg-primary text-white py-2 fw-bold text-center">
+                        {{ yearData.year }} 年台股週線與 KD 走勢圖
+                    </div>
+                    <div class="card-body bg-white p-2">
+                        <div :id="'chart-year-' + yearData.year" style="width: 100%; height: 450px;"></div>
+                    </div>
+                </div>
+
+                <div class="table-responsive bg-white rounded shadow-sm border">
                     <table class="table table-hover table-striped mb-0 text-center align-middle">
                         <thead class="table-light">
                             <tr>
@@ -89,6 +106,7 @@
                         </tbody>
                     </table>
                 </div>
+
             </div>
           </div>
         </div>
@@ -104,12 +122,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 
 const isLoading = ref(true);
 const errorMsg = ref('');
 const rawCrosses = ref([]);
+const fullWeeklyData = ref([]); // 🔥 儲存所有的週線原始數據，以供繪圖使用
 const activeDecade = ref('2020');
+
+// 控制目前展開的圖表年份
+const activeChartYear = ref(null);
+let chartInstanceMap = {};
 
 // 定義可選的年代
 const availableDecades = [
@@ -126,7 +149,7 @@ const sanitize = (q) => {
     return q.filter(x => x.open != null && x.close != null && !isNaN(x.close));
 };
 
-// 強化版計算 KD (加入 high === low 的防呆保護)
+// 強化版計算 KD
 const calcKD = (q) => {
     let k=50, d=50;
     return q.map((x, i, a) => {
@@ -134,7 +157,6 @@ const calcKD = (q) => {
         const r = a.slice(i-8, i+1);
         const h = Math.max(...r.map(v=>v.high));
         const l = Math.min(...r.map(v=>v.low));
-        // 防呆：若單週無波動(高低相同)，RSV 設為中值 50 避免 NaN
         let rsv = h === l ? 50 : ((x.close-l)/(h-l))*100;
         k = (rsv + k*2)/3; 
         d = (k + d*2)/3;
@@ -151,6 +173,8 @@ onMounted(async () => {
         if (safeWeekly.length === 0) throw new Error('API 傳回的週線數據為空');
 
         const weeklyKD = calcKD(safeWeekly);
+        fullWeeklyData.value = weeklyKD; // 保存完整數據供繪圖
+
         const crosses = [];
         let lastCrossPrice = null;
         let lastCrossType = null;
@@ -163,7 +187,6 @@ onMounted(async () => {
             if (p.k <= p.d && c.k > c.d) crossType = 'golden';
             if (p.k >= p.d && c.k < c.d) crossType = 'death';
 
-            // 確保不會連續記錄相同的交叉類型 (過濾雜訊)
             if (crossType && crossType !== lastCrossType) {
                 const year = new Date(c.date).getFullYear();
                 let pointChange = 0;
@@ -185,7 +208,6 @@ onMounted(async () => {
             }
         }
         
-        // 反轉陣列，讓最新的交叉在最上面
         rawCrosses.value = crosses.reverse();
 
         if (rawCrosses.value.length > 0) {
@@ -201,7 +223,7 @@ onMounted(async () => {
     }
 });
 
-// 將所有交叉事件分門別類 (依照 10 年為單位，再依照年份群組)
+// 資料分組邏輯
 const groupedData = computed(() => {
     const groups = { '1980': [], '1990': [], '2000': [], '2010': [], '2020': [] };
     
@@ -229,34 +251,106 @@ const groupedData = computed(() => {
     return groups;
 });
 
-// 統計工具函數
+// 統計函數
 const getDecadeAvgCrosses = (decade) => {
     const data = groupedData.value[decade];
     if (!data || data.length === 0) return 0;
     const totalCrosses = data.reduce((sum, yData) => sum + yData.crosses.length, 0);
     return (totalCrosses / data.length).toFixed(1);
 };
-
 const getDecadeBestWave = (decade) => {
     const data = groupedData.value[decade];
     if (!data) return 0;
     let max = 0;
-    data.forEach(y => y.crosses.forEach(c => {
-        if (c.change > max) max = c.change;
-    }));
+    data.forEach(y => y.crosses.forEach(c => { if (c.change > max) max = c.change; }));
     return max.toFixed(0);
 };
-
 const getDecadeWorstWave = (decade) => {
     const data = groupedData.value[decade];
     if (!data) return 0;
     let min = 0;
-    data.forEach(y => y.crosses.forEach(c => {
-        if (c.change < min) min = c.change;
-    }));
+    data.forEach(y => y.crosses.forEach(c => { if (c.change < min) min = c.change; }));
     return min.toFixed(0);
 };
 
+// ==========================================
+// 🔥 繪製特定年份 K 線圖邏輯
+// ==========================================
+const toggleYearChart = async (year) => {
+    if (activeChartYear.value === year) {
+        activeChartYear.value = null; // 點擊第二次收合
+        return;
+    }
+    
+    activeChartYear.value = year;
+    await nextTick(); // 等待 Vue 展開 DOM
+    
+    const domId = 'chart-year-' + year;
+    const dom = document.getElementById(domId);
+    
+    if (!dom || !window.echarts) {
+        alert('圖表庫尚未準備好，請稍後再試');
+        return;
+    }
+
+    // 篩選當年度的完整週線資料
+    const yearData = fullWeeklyData.value.filter(d => d.date.startsWith(year.toString()));
+    if (yearData.length === 0) return;
+
+    const categoryData = yearData.map(item => item.date);
+    const candleValues = yearData.map(item => [item.open, item.close, item.low, item.high]);
+    const volumeData = yearData.map(item => ({
+        value: item.volume || 0,
+        itemStyle: { color: item.close >= item.open ? '#dc3545' : '#198754' }
+    }));
+    const kData = yearData.map(item => item.k);
+    const dData = yearData.map(item => item.d);
+
+    // 標註當年的黃金/死亡交叉
+    const kdMarks = [];
+    for (let i = 1; i < yearData.length; i++) {
+        const p = yearData[i - 1], c = yearData[i];
+        if (p.k <= p.d && c.k > c.d) {
+            kdMarks.push({ coord: [i, c.k], symbol: 'arrow', symbolSize: 12, itemStyle: { color: '#dc3545' }, value: '金叉' });
+        }
+        if (p.k >= p.d && c.k < c.d) {
+            kdMarks.push({ coord: [i, c.k], symbol: 'arrow', symbolRotate: 180, symbolSize: 12, itemStyle: { color: '#198754' }, value: '死叉' });
+        }
+    }
+
+    // 銷毀舊實例並初始化新實例
+    if (chartInstanceMap[domId]) chartInstanceMap[domId].dispose();
+    const inst = window.echarts.init(dom);
+    chartInstanceMap[domId] = inst;
+
+    inst.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+        axisPointer: { link: [{ xAxisIndex: 'all' }] },
+        legend: { data: ['週 K線', '成交量', 'K值', 'D值'], top: 5 },
+        grid: [
+            { left: '6%', right: '5%', top: '10%', height: '45%' },
+            { left: '6%', right: '5%', top: '60%', height: '15%' },
+            { left: '6%', right: '5%', top: '80%', height: '15%' }
+        ],
+        xAxis: [
+            { type: 'category', data: categoryData, gridIndex: 0, axisLabel: { show: false } },
+            { type: 'category', data: categoryData, gridIndex: 1, axisLabel: { show: false } },
+            { type: 'category', data: categoryData, gridIndex: 2 }
+        ],
+        yAxis: [
+            { scale: true, gridIndex: 0 },
+            { scale: true, gridIndex: 1, axisLabel: { show: false } },
+            { min: 0, max: 100, gridIndex: 2, splitLine: { show: true, lineStyle: { type: 'dashed' } } }
+        ],
+        dataZoom: [{ type: 'inside', xAxisIndex: [0, 1, 2] }], // 支援滑鼠滾輪縮放
+        series: [
+            { name: '週 K線', type: 'candlestick', data: candleValues, itemStyle: { color: '#dc3545', color0: '#198754', borderColor: '#dc3545', borderColor0: '#198754' } },
+            { name: '成交量', type: 'bar', data: volumeData, xAxisIndex: 1, yAxisIndex: 1 },
+            { name: 'K值', type: 'line', data: kData, xAxisIndex: 2, yAxisIndex: 2, lineStyle: { color: '#dc3545' }, markPoint: { data: kdMarks, label: {show:false} } },
+            { name: 'D值', type: 'line', data: dData, xAxisIndex: 2, yAxisIndex: 2, lineStyle: { color: '#0d6efd' } }
+        ]
+    });
+};
 </script>
 
 <style scoped>
