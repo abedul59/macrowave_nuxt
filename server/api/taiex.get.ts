@@ -1,7 +1,15 @@
 export default defineEventHandler(async (event) => {
   try {
-    const fetchYahoo = async (interval: string, range: string) => {
-      const url = `https://query2.finance.yahoo.com/v8/finance/chart/^TWII?range=${range}&interval=${interval}`;
+    // 改寫 fetchYahoo，支援強制傳入起始與結束時間 (period1, period2)
+    const fetchYahoo = async (interval: string, range?: string, p1?: number, p2?: number) => {
+      let url = `https://query2.finance.yahoo.com/v8/finance/chart/^TWII?interval=${interval}`;
+      
+      if (p1 !== undefined && p2 !== undefined) {
+        url += `&period1=${p1}&period2=${p2}`;
+      } else {
+        url += `&range=${range}`;
+      }
+      
       const res = await fetch(url);
       const data = await res.json();
       const result = data.chart.result[0];
@@ -14,15 +22,19 @@ export default defineEventHandler(async (event) => {
         high: quote.high[i],
         low: quote.low[i],
         close: quote.close[i],
-        volume: quote.volume[i] || 0 // 抓取成交量 (若無資料補 0)
+        volume: quote.volume[i] || 0
       })).filter((q: any) => q.close !== null);
     };
 
-    // 🔥 核心修正：將 weekly 與 monthly 的 range 改為 'max'，解鎖近 30 年歷史數據
+    // 取得目前時間與 1980 年 1 月 1 日的 Unix Timestamp (秒)
+    const now = Math.floor(Date.now() / 1000);
+    const start1980 = 315532800; 
+
+    // 🔥 核心修正：利用時間戳強迫 Yahoo 吐出真實的 1wk 週線，破解自動降頻的限制
     const [daily, weekly, monthly] = await Promise.all([
-      fetchYahoo('1d', '5y'),   // 日線圖保留 5 年即可，避免封包過大導致載入緩慢
-      fetchYahoo('1wk', 'max'), // 週線圖解鎖最大極限 (台股從 1997 年起算)
-      fetchYahoo('1mo', 'max')  // 月線圖解鎖最大極限
+      fetchYahoo('1d', '5y'),                            // 日線維持近 5 年，確保載入速度
+      fetchYahoo('1wk', undefined, start1980, now),      // 週線強制抓取 1980 至今
+      fetchYahoo('1mo', undefined, start1980, now)       // 月線強制抓取 1980 至今
     ]);
 
     return { success: true, data: { daily, weekly, monthly } };
