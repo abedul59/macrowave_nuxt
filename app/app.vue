@@ -32,6 +32,11 @@
             ⏳ 月KD 歷史回測
           </button>
         </li>
+        <li class="nav-item">
+          <button :class="['nav-link py-3 text-primary', { active: activeTab === 'tmf' }]" @click="activeTab = 'tmf'">
+            🔥 散戶多空比 (00631L)
+          </button>
+        </li>
       </ul>
     </div>
 
@@ -47,12 +52,13 @@
 import { ref, computed } from 'vue'
 import { useHead } from '#imports'
 
-// 強制手動匯入五個分頁檔案
+// 強制手動匯入六個分頁檔案
 import TabDashboard from '../components/TabDashboard.vue'
 import TabTaiexTraditional from '../components/TabTaiexTraditional.vue'
 import TabTaiexDynamic from '../components/TabTaiexDynamic.vue'
 import TabTaiexHistory from '../components/TabTaiexHistory.vue'
-import TabTaiexHistoryMonthly from '../components/TabTaiexHistoryMonthly.vue' // 🔥 新增匯入
+import TabTaiexHistoryMonthly from '../components/TabTaiexHistoryMonthly.vue'
+import TabTmfRetailRatio from '../components/TabTmfRetailRatio.vue'
 
 // 全局引入 ECharts 套件
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
@@ -67,7 +73,8 @@ const currentTabComponent = computed(() => {
     case 'taiex': return TabTaiexTraditional
     case 'dynamic': return TabTaiexDynamic
     case 'history': return TabTaiexHistory
-    case 'historyMonthly': return TabTaiexHistoryMonthly // 🔥 對應新組件
+    case 'historyMonthly': return TabTaiexHistoryMonthly
+    case 'tmf': return TabTmfRetailRatio
     default: return TabDashboard
   }
 })
