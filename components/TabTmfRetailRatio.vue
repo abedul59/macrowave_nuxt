@@ -5,13 +5,13 @@
       <div class="card-body">
         <h5 class="fw-bold text-primary mb-2">🔥 微台指散戶多空比 ╳ 00631L 策略觀測</h5>
         <p class="text-muted small mb-0">
-          利用「微台指 (TMF) 散戶多空比」作為反市場指標。當散戶極度悲觀（做空）時，視為 00631L 買進訊號；當散戶極度樂觀（做多）時，視為賣出訊號。
+          利用「微台指 (TMF) 散戶多空比」作為反市場指標。下方圖表已將 00631L 走勢與散戶籌碼對齊，幫助您肉眼驗證「散戶做多即高點、散戶做空即低點」的逆向現象。
         </p>
       </div>
     </div>
 
     <div v-if="isLoading" class="text-center my-5">
-      <div class="spinner-border text-primary"></div><p class="mt-2 fw-bold text-primary">籌碼大數據調閱與 00631L 圖表構建中...</p>
+      <div class="spinner-border text-primary"></div><p class="mt-2 fw-bold text-primary">籌碼大數據調閱與對齊圖表構建中...</p>
     </div>
 
     <div v-if="errorMsg" class="alert alert-danger fw-bold text-center">
@@ -71,17 +71,18 @@
         </div>
 
         <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white fw-bold">
-                <span>📈 00631L (元大台灣50正2) 近一年走勢圖</span>
+            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+                <span>📈 00631L 走勢與散戶籌碼對照圖</span>
+                <span class="badge bg-primary">滑鼠滾輪可縮放區間</span>
             </div>
             <div class="card-body p-2">
-                <div id="chart-etf" style="width: 100%; height: 400px;"></div>
+                <div id="chart-etf" style="width: 100%; height: 600px;"></div>
             </div>
         </div>
 
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-secondary text-white fw-bold">
-                <span>📜 微台指散戶多空比近一個月歷史明細</span>
+                <span>📜 微台指散戶多空比歷史明細</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -122,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
 
 const isLoading = ref(true);
 const errorMsg = ref('');
@@ -165,6 +166,11 @@ const signalTextClass = computed(() => {
 
 const calcMA = (n, q) => q.map((_, i, a) => i < n-1 ? null : a.slice(i-n+1, i+1).reduce((s, x)=>s+x.close,0)/n);
 
+// 🔥 當使用者調整 Buy/Sell 閾值時，即時重繪圖表更新標示線
+watch([buyThreshold, sellThreshold], () => {
+    renderChart();
+});
+
 onMounted(async () => {
     try {
         const [resTmf, resEtf] = await Promise.all([
@@ -179,7 +185,6 @@ onMounted(async () => {
         historyList.value = resTmf.history;
         etfData.value = resEtf.data;
 
-        // 🔥 修正：使用偵測迴圈確保 ECharts 庫載入完畢，修復圖表空白問題
         await nextTick();
         let checkCount = 0;
         const checkEcharts = setInterval(() => {
@@ -200,48 +205,95 @@ onMounted(async () => {
     }
 });
 
+let chartInstance = null;
+
 const renderChart = () => {
     const dom = document.getElementById('chart-etf');
     if (!dom || !window.echarts || !etfData.value) return;
 
+    if (chartInstance) {
+        chartInstance.dispose();
+    }
+    chartInstance = window.echarts.init(dom);
+
     const data = etfData.value;
+    
+    // 建立統一的時間軸 (以 ETF 報價時間為主)
     const categoryData = data.map(item => item.date);
+    
+    // ETF K線與量能數據
     const candleValues = data.map(item => [item.open, item.close, item.low, item.high]);
     const volumeData = data.map(item => ({
         value: item.volume || 0,
         itemStyle: { color: item.close >= item.open ? '#dc3545' : '#198754' }
     }));
     
+    // 建立多空比快速對照表
+    const ratioMap = {};
+    historyList.value.forEach(item => {
+        // 將期交所格式 2026/05/18 轉為 YYYY-MM-DD，若格式已相同則免
+        const formattedDate = item.date.replace(/\//g, '-'); 
+        ratioMap[formattedDate] = item.retailRatio * 100; // 轉為 %
+        ratioMap[item.date] = item.retailRatio * 100; 
+    });
+
+    // 將多空比對應到 ETF 的時間軸
+    const ratioData = categoryData.map(date => {
+        const val = ratioMap[date];
+        if (val === undefined) return null; // 該日無籌碼數據
+        return {
+            value: val.toFixed(2),
+            itemStyle: { color: val < 0 ? '#198754' : '#dc3545' } // 台灣習慣：做空(綠)、做多(紅)
+        };
+    });
+
     const ma20 = calcMA(20, data);
     const ma60 = calcMA(60, data);
 
-    const inst = window.echarts.init(dom);
-
-    inst.setOption({
+    chartInstance.setOption({
         tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
         axisPointer: { link: [{ xAxisIndex: 'all' }] },
-        legend: { data: ['00631L K線', '20MA', '60MA', '成交量'], top: 5 },
+        legend: { data: ['00631L K線', '20MA', '60MA', '成交量', '散戶多空比'], top: 5 },
         grid: [
-            { left: '6%', right: '5%', top: '10%', height: '55%' },
-            { left: '6%', right: '5%', top: '70%', height: '20%' }
+            { left: '8%', right: '5%', top: '8%', height: '45%' },     // K線區塊
+            { left: '8%', right: '5%', top: '56%', height: '15%' },    // 量能區塊
+            { left: '8%', right: '5%', top: '75%', height: '20%' }     // 籌碼對齊區塊
         ],
         xAxis: [
             { type: 'category', data: categoryData, gridIndex: 0, axisLabel: { show: false } },
-            { type: 'category', data: categoryData, gridIndex: 1 }
+            { type: 'category', data: categoryData, gridIndex: 1, axisLabel: { show: false } },
+            { type: 'category', data: categoryData, gridIndex: 2 }
         ],
         yAxis: [
             { scale: true, gridIndex: 0 },
-            { scale: true, gridIndex: 1, axisLabel: { show: false } }
+            { scale: true, gridIndex: 1, axisLabel: { show: false } },
+            { type: 'value', gridIndex: 2, name: '多空比(%)', splitLine: { show: true, lineStyle: { type: 'dashed', opacity: 0.5 } } }
         ],
-        dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], start: 70, end: 100 }, { show: true, xAxisIndex: [0, 1], top: '94%', height: 15 }], 
+        // 預設放大至最後 50 根 K 棒
+        dataZoom: [
+            { type: 'inside', xAxisIndex: [0, 1, 2], start: 70, end: 100 }, 
+            { show: true, xAxisIndex: [0, 1, 2], top: '96%', height: 15 }
+        ], 
         series: [
             { 
-                name: '00631L K線', type: 'candlestick', data: candleValues, 
+                name: '00631L K線', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: candleValues, 
                 itemStyle: { color: '#dc3545', color0: '#198754', borderColor: '#dc3545', borderColor0: '#198754' } 
             },
-            { name: '20MA', type: 'line', data: ma20, smooth: true, symbol: 'none', lineStyle: { color: '#0dcaf0' } },
-            { name: '60MA', type: 'line', data: ma60, smooth: true, symbol: 'none', lineStyle: { color: '#ffc107' } },
-            { name: '成交量', type: 'bar', data: volumeData, xAxisIndex: 1, yAxisIndex: 1 },
+            { name: '20MA', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma20, smooth: true, symbol: 'none', lineStyle: { color: '#0dcaf0' } },
+            { name: '60MA', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma60, smooth: true, symbol: 'none', lineStyle: { color: '#ffc107' } },
+            { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: volumeData },
+            // 🔥 新增的多空比序列
+            {
+                name: '散戶多空比', type: 'bar', xAxisIndex: 2, yAxisIndex: 2, data: ratioData,
+                markLine: {
+                    symbol: 'none',
+                    label: { position: 'insideEndTop', formatter: '{b}: {c}%' },
+                    data: [
+                        { yAxis: buyThreshold.value, name: '買進', lineStyle: { color: '#dc3545', type: 'solid', width: 2 } },
+                        { yAxis: sellThreshold.value, name: '賣出', lineStyle: { color: '#198754', type: 'solid', width: 2 } }
+                    ]
+                }
+            }
         ]
     });
 };
