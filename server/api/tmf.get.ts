@@ -10,33 +10,74 @@ export default defineEventHandler(async (event) => {
 
         const today = new Date();
         const pastDate = new Date();
-        // 🔥 縮短為近 15 天，避免觸發期交所跨月或天數過長的查詢限制
+        // 抓取近 15 天資料
         pastDate.setDate(today.getDate() - 15); 
 
         const startDateStr = formatDate(pastDate);
         const endDateStr = formatDate(today);
 
-        // 🔥 核心修正：加入完整的瀏覽器偽裝 Header，突破期交所防爬蟲機制
-        const headers = {
+        // 🔥 終極偽裝：加上 Referer 騙定期交所我們是從它的官方網頁點擊下載的
+        const baseHeaders = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cache-Control': 'max-age=0',
+            'Origin': 'https://www.taifex.com.tw'
         };
 
+        // ==========================================
         // 1. 抓取三大法人 TMF 區間歷史資料
-        const instParams = new URLSearchParams({ queryStartDate: startDateStr, queryEndDate: endDateStr, commodityId: 'TMF' });
-        const instRes = await fetch('https://www.taifex.com.tw/cht/3/futContractsDateDown', { method: 'POST', body: instParams, headers });
+        // ==========================================
+        const instParams = new URLSearchParams();
+        instParams.append('queryStartDate', startDateStr);
+        instParams.append('queryEndDate', endDateStr);
+        instParams.append('commodityId', 'TMF');
+
+        const instHeaders = { ...baseHeaders, 'Referer': 'https://www.taifex.com.tw/cht/3/futContractsDate' };
+        
+        const instRes = await fetch('https://www.taifex.com.tw/cht/3/futContractsDateDown', { 
+            method: 'POST', 
+            body: instParams.toString(), // 🔥 強制轉為標準 form-urlencoded 字串
+            headers: instHeaders 
+        });
+
+        if (!instRes.ok) throw new Error(`法人資料 API 請求失敗，狀態碼: ${instRes.status}`);
         const instBuffer = await instRes.arrayBuffer();
         const instText = new TextDecoder('big5').decode(instBuffer);
-        
+
+        if (instText.includes('<html') || instText.includes('請稍後再試')) {
+            throw new Error('被期交所防火牆阻擋 (回傳了網頁而非 CSV，請稍後再試)');
+        }
+
+        // ==========================================
         // 2. 抓取全市場 TMF 區間歷史資料
-        const marketParams = new URLSearchParams({ down_type: '1', queryStartDate: startDateStr, queryEndDate: endDateStr, commodity_id: 'TMF' });
-        const marketRes = await fetch('https://www.taifex.com.tw/cht/3/futDataDown', { method: 'POST', body: marketParams, headers });
+        // ==========================================
+        const marketParams = new URLSearchParams();
+        marketParams.append('down_type', '1');
+        marketParams.append('queryStartDate', startDateStr);
+        marketParams.append('queryEndDate', endDateStr);
+        marketParams.append('commodity_id', 'TMF');
+
+        const marketHeaders = { ...baseHeaders, 'Referer': 'https://www.taifex.com.tw/cht/3/futDataDown' };
+
+        const marketRes = await fetch('https://www.taifex.com.tw/cht/3/futDataDown', { 
+            method: 'POST', 
+            body: marketParams.toString(), 
+            headers: marketHeaders 
+        });
+
+        if (!marketRes.ok) throw new Error(`全市場資料 API 請求失敗，狀態碼: ${marketRes.status}`);
         const marketBuffer = await marketRes.arrayBuffer();
         const marketText = new TextDecoder('big5').decode(marketBuffer);
 
-        // CSV 解析函數 (強化換行符號容錯率)
+        if (marketText.includes('<html') || marketText.includes('請稍後再試')) {
+            throw new Error('全市場資料被期交所防火牆阻擋');
+        }
+
+        // ==========================================
+        // CSV 解析與聚合邏輯
+        // ==========================================
         const parseCSV = (text: string) => {
             const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l !== '');
             if (lines.length < 2) return [];
@@ -52,16 +93,15 @@ export default defineEventHandler(async (event) => {
         const instRows = parseCSV(instText);
         const marketRows = parseCSV(marketText);
 
-        // 依日期聚合三大法人未平倉量
         const instMap: any = {};
         instRows.forEach(row => {
+            // 期交所的日期格式為 YYYY/MM/DD
             const date = row['日期'];
             if (!date) return;
             const netOI = parseInt(row['多空未平倉口數淨額'], 10) || 0;
             instMap[date] = (instMap[date] || 0) + netOI;
         });
 
-        // 依日期聚合全市場一般交易時段未平倉量
         const marketMap: any = {};
         marketRows.forEach(row => {
             const date = row['日期'];
@@ -71,7 +111,6 @@ export default defineEventHandler(async (event) => {
             marketMap[date] = (marketMap[date] || 0) + oi;
         });
 
-        // 合併與計算多空比
         const historyData: any[] = [];
         Object.keys(marketMap).forEach(date => {
             const totalOI = marketMap[date];
@@ -83,13 +122,12 @@ export default defineEventHandler(async (event) => {
             historyData.push({ date, totalOI, instNetOI, retailNetOI, retailRatio });
         });
 
-        // 排序：由新到舊
         historyData.sort((a, b) => b.date.localeCompare(a.date));
 
         if (historyData.length === 0) {
             return { 
                 success: false, 
-                message: '期交所歷史區間內查無交易數據。可能原因：目前為連續假日，或期交所伺服器阻擋存取。' 
+                message: `成功連線期交所，但查無 ${startDateStr} 至 ${endDateStr} 的交易數據 (可能為連假)` 
             };
         }
 
