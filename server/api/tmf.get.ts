@@ -9,33 +9,42 @@ export default defineEventHandler(async (event) => {
         };
 
         const today = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(today.getDate() - 30); // 抓取過去 30 天包含例假日的資料
+        const pastDate = new Date();
+        // 🔥 縮短為近 15 天，避免觸發期交所跨月或天數過長的查詢限制
+        pastDate.setDate(today.getDate() - 15); 
 
-        const startDateStr = formatDate(thirtyDaysAgo);
+        const startDateStr = formatDate(pastDate);
         const endDateStr = formatDate(today);
+
+        // 🔥 核心修正：加入完整的瀏覽器偽裝 Header，突破期交所防爬蟲機制
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        };
 
         // 1. 抓取三大法人 TMF 區間歷史資料
         const instParams = new URLSearchParams({ queryStartDate: startDateStr, queryEndDate: endDateStr, commodityId: 'TMF' });
-        const instRes = await fetch('https://www.taifex.com.tw/cht/3/futContractsDateDown', { method: 'POST', body: instParams });
+        const instRes = await fetch('https://www.taifex.com.tw/cht/3/futContractsDateDown', { method: 'POST', body: instParams, headers });
         const instBuffer = await instRes.arrayBuffer();
         const instText = new TextDecoder('big5').decode(instBuffer);
         
         // 2. 抓取全市場 TMF 區間歷史資料
         const marketParams = new URLSearchParams({ down_type: '1', queryStartDate: startDateStr, queryEndDate: endDateStr, commodity_id: 'TMF' });
-        const marketRes = await fetch('https://www.taifex.com.tw/cht/3/futDataDown', { method: 'POST', body: marketParams });
+        const marketRes = await fetch('https://www.taifex.com.tw/cht/3/futDataDown', { method: 'POST', body: marketParams, headers });
         const marketBuffer = await marketRes.arrayBuffer();
         const marketText = new TextDecoder('big5').decode(marketBuffer);
 
-        // CSV 解析函數
+        // CSV 解析函數 (強化換行符號容錯率)
         const parseCSV = (text: string) => {
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
+            const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l !== '');
             if (lines.length < 2) return [];
-            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            const csvHeaders = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
             return lines.slice(1).map(line => {
                 const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
                 const obj: any = {};
-                headers.forEach((h, i) => obj[h] = values[i] || '');
+                csvHeaders.forEach((h, i) => obj[h] = values[i] || '');
                 return obj;
             });
         };
@@ -78,7 +87,10 @@ export default defineEventHandler(async (event) => {
         historyData.sort((a, b) => b.date.localeCompare(a.date));
 
         if (historyData.length === 0) {
-            return { success: false, message: '期交所歷史區間內查無交易數據' };
+            return { 
+                success: false, 
+                message: '期交所歷史區間內查無交易數據。可能原因：目前為連續假日，或期交所伺服器阻擋存取。' 
+            };
         }
 
         return {
