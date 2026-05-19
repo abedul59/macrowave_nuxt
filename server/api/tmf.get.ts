@@ -1,19 +1,20 @@
+import { promises as fs } from 'fs';
+import path from 'path';
+
 export default defineEventHandler(async (event) => {
     try {
-        // 🔥 請將下方網址替換成您剛剛在 Hugging Face 建立的 Space 網址
-        // 格式通常為：https://您的帳號-專案名稱.hf.space/api/tmf
-        const hfApiUrl = 'https://lawxstudents168-macrowave-taifex-api.hf.space/api/tmf'; 
+        // 直接讀取由本地端上傳的 JSON 檔案
+        const filePath = path.join(process.cwd(), 'public', 'tmf_historical_data.json');
         
-        const response = await fetch(hfApiUrl);
-        const data = await response.json();
+        const fileContent = await fs.readFile(filePath, 'utf-8');
+        const data = JSON.parse(fileContent);
         
-        if (!response.ok || !data.success) {
-            throw new Error(data.message || 'Hugging Face API 請求失敗');
-        }
-        
-        return data;
+        return data; // 直接回傳包含 success, latest, history 的物件
 
     } catch (error: any) {
-        return { success: false, message: error.message };
+        return { 
+            success: false, 
+            message: '尚未接收到本地端上傳的籌碼資料。請使用本地端同步工具進行第一次更新。' 
+        };
     }
 });
