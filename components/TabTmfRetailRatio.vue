@@ -160,7 +160,7 @@ const triggerHuggingFaceSync = async () => {
     successMsg.value = '';
     
     // ⚠️ 請替換為您真實的 Hugging Face Space 網址與 Token
-    const hfUrl = 'https://您的帳號-您的專案名.hf.space/api/trigger-sync?token=my_secret_token_123';
+    const hfUrl = 'https://lawxstudents168-macrowave-taifex-api.hf.space/api/trigger-sync?token=my_secret_token_123';
     
     const response = await fetch(hfUrl, { method: 'POST' });
     
