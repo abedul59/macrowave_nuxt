@@ -2,11 +2,11 @@
   <div class="container pb-5 mt-4">
     
     <div class="card shadow-sm border-0 mb-4 bg-light">
-      <div class="card-body d-flex justify-content-between align-items-center">
+      <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
-            <h5 class="fw-bold text-primary mb-2">🔥 微台指散戶多空比 ╳ 價格 戰情室 (智能記憶版)</h5>
+            <h5 class="fw-bold text-primary mb-2">🔥 微台指散戶多空比 ╳ 價格 戰情室</h5>
             <p class="text-muted small mb-0">
-              您的歷史資料將安全地儲存於瀏覽器本機端。重整網頁不遺失，且資料絕不外流。
+              支援雲端自動同步與本機手動上傳，打造最彈性的量化看盤環境。
             </p>
         </div>
         <div v-if="hasCachedData" class="badge bg-success p-2 fs-6">
@@ -17,7 +17,24 @@
 
     <div class="card shadow-sm border-0 mb-4 border-primary">
       <div class="card-body bg-white">
+        <div class="mb-4 pb-3 border-bottom border-light">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+             <div>
+                <h6 class="fw-bold mb-1">☁️ 雲端自動同步 (推薦)</h6>
+                <p class="text-muted small mb-0">透過 Hugging Face API 於背景自動抓取最新資料並更新至資料庫。</p>
+             </div>
+             <button class="btn btn-primary fw-bold" @click="triggerHuggingFaceSync" :disabled="isSyncing">
+                <span v-if="isSyncing" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                {{ isSyncing ? '同步指令已發送...' : '🔄 一鍵同步最新數據' }}
+              </button>
+          </div>
+        </div>
+
         <div class="row align-items-end g-3">
+          <div class="col-12">
+            <h6 class="fw-bold mb-1">📁 本機手動上傳 (備用)</h6>
+            <p class="text-muted small mb-0">若雲端同步失敗，可上傳 CSV 檔案，資料將安全儲存於瀏覽器中。</p>
+          </div>
           <div class="col-md-3">
             <label class="form-label fw-bold small text-muted">📊 選擇商品</label>
             <select class="form-select" v-model="selectedSymbol">
@@ -25,11 +42,11 @@
             </select>
           </div>
           <div class="col-md-5">
-            <label class="form-label fw-bold small text-muted">📁 更新歷史數據 (CSV)</label>
+            <label class="form-label fw-bold small text-muted">選擇歷史數據 (CSV)</label>
             <input class="form-control" type="file" accept=".csv" @change="onFileChange" ref="fileInput">
           </div>
           <div class="col-md-2">
-            <button class="btn btn-primary w-100 fw-bold" @click="processCSV" :disabled="!selectedFile">
+            <button class="btn btn-secondary w-100 fw-bold" @click="processCSV" :disabled="!selectedFile">
               🚀 載入新檔
             </button>
           </div>
@@ -43,7 +60,10 @@
     </div>
 
     <div v-if="errorMsg" class="alert alert-danger fw-bold text-center">
-      ❌ 錯誤：{{ errorMsg }}
+      ❌ {{ errorMsg }}
+    </div>
+    <div v-if="successMsg" class="alert alert-success fw-bold text-center">
+      ✅ {{ successMsg }}
     </div>
 
     <div v-if="historyList.length > 0">
@@ -99,11 +119,13 @@
 import { ref, onMounted, nextTick } from 'vue'
 
 const errorMsg = ref('');
+const successMsg = ref('');
 const historyList = ref([]);
 const selectedSymbol = ref('TMF');
 const selectedFile = ref(null);
 const fileInput = ref(null);
-const hasCachedData = ref(false); // 標記是否擁有記憶體資料
+const hasCachedData = ref(false);
+const isSyncing = ref(false);
 
 let chartInstance = null;
 const CACHE_KEY = 'macrowave_tmf_cache_v1';
@@ -130,12 +152,42 @@ onMounted(async () => {
     }
 });
 
+// 🔥 新增：呼叫 Hugging Face API 進行雲端同步
+const triggerHuggingFaceSync = async () => {
+  try {
+    isSyncing.value = true;
+    errorMsg.value = '';
+    successMsg.value = '';
+    
+    // ⚠️ 請替換為您真實的 Hugging Face Space 網址與 Token
+    const hfUrl = 'https://您的帳號-您的專案名.hf.space/api/trigger-sync?token=my_secret_token_123';
+    
+    const response = await fetch(hfUrl, { method: 'POST' });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP 錯誤狀態碼: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log("Hugging Face 回應:", result);
+    
+    successMsg.value = '✅ 已成功發送同步指令！系統正在雲端抓取資料，請於 15~30 秒後重新整理網頁（注意：若您有使用本機上傳資料，請先點擊「清除記憶」才能看到雲端最新數據）。';
+    
+  } catch (error) {
+    console.error('觸發失敗:', error);
+    errorMsg.value = '觸發同步失敗，請檢查網路連線或 API 網址設定。';
+  } finally {
+    isSyncing.value = false;
+  }
+}
+
 // 當使用者選取檔案時
 const onFileChange = (event) => {
     const file = event.target.files[0];
     if (file && file.name.endsWith('.csv')) {
         selectedFile.value = file;
         errorMsg.value = '';
+        successMsg.value = '';
     } else {
         selectedFile.value = null;
         errorMsg.value = '請選擇有效的 CSV 檔案！';
@@ -156,23 +208,24 @@ const processCSV = () => {
                 throw new Error("CSV 解析為空，請檢查檔案內容。");
             }
 
-            // 依日期由新到舊排序 (用於表格呈現)
+            // 依日期由新到舊排序
             parsedData.sort((a, b) => new Date(b.date) - new Date(a.date));
             historyList.value = parsedData;
             hasCachedData.value = true;
 
-            // 🔥 核心功能：將解析完的資料寫入瀏覽器永久記憶體
+            // 寫入瀏覽器永久記憶體
             localStorage.setItem(CACHE_KEY, JSON.stringify(parsedData));
 
-            // 圖表需要由舊到新
+            // 繪圖
             const chartData = [...parsedData].reverse();
-            
             await nextTick();
             renderChart(chartData);
             
             errorMsg.value = '';
+            successMsg.value = '✅ CSV 解析成功，資料已儲存於本機記憶體。';
         } catch (err) {
             errorMsg.value = "解析失敗：" + err.message;
+            successMsg.value = '';
         }
     };
     reader.readAsText(selectedFile.value);
@@ -184,17 +237,17 @@ const clearCache = () => {
     historyList.value = [];
     hasCachedData.value = false;
     errorMsg.value = '';
+    successMsg.value = '🗑️ 本機記憶資料已清除。此網頁現在將預設顯示雲端 (Vercel) 資料庫內容。';
     
     if (chartInstance) {
         chartInstance.dispose();
         chartInstance = null;
     }
     
-    // 清空選擇的檔案
-    selectedFile.value = null;
     if (fileInput.value) {
         fileInput.value.value = '';
     }
+    selectedFile.value = null;
 };
 
 // CSV 解析邏輯
@@ -233,7 +286,7 @@ const parseCSVText = (csvText) => {
 const renderChart = (data) => {
     const dom = document.getElementById('chart-tmf');
     if (!dom || !window.echarts) {
-        errorMsg.value = "找不到 ECharts 圖表元件，請重新整理網頁。";
+        errorMsg.value = "找不到 ECharts 圖表元件，請確認您的 Nuxt 專案有正確引入 ECharts。";
         return;
     }
 
