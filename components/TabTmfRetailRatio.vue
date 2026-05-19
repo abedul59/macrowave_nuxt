@@ -2,11 +2,16 @@
   <div class="container pb-5 mt-4">
     
     <div class="card shadow-sm border-0 mb-4 bg-light">
-      <div class="card-body">
-        <h5 class="fw-bold text-primary mb-2">🔥 微台指散戶多空比 ╳ 價格 戰情室 (本機 CSV 上傳版)</h5>
-        <p class="text-muted small mb-0">
-          無需伺服器處理！請在下方選擇您的歷史數據 CSV 檔案，系統將於瀏覽器端極速解析並渲染圖表。
-        </p>
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="fw-bold text-primary mb-2">🔥 微台指散戶多空比 ╳ 價格 戰情室 (智能記憶版)</h5>
+            <p class="text-muted small mb-0">
+              您的歷史資料將安全地儲存於瀏覽器本機端。重整網頁不遺失，且資料絕不外流。
+            </p>
+        </div>
+        <div v-if="hasCachedData" class="badge bg-success p-2 fs-6">
+            🟢 已載入本機記憶資料
+        </div>
       </div>
     </div>
 
@@ -17,17 +22,20 @@
             <label class="form-label fw-bold small text-muted">📊 選擇商品</label>
             <select class="form-select" v-model="selectedSymbol">
               <option value="TMF">微台指 (TMF)</option>
-              <option value="TX">大台指 (TX) - 擴充準備</option>
-              <option value="MTX">小台指 (MTX) - 擴充準備</option>
             </select>
           </div>
-          <div class="col-md-7">
-            <label class="form-label fw-bold small text-muted">📁 選擇歷史數據 (CSV)</label>
-            <input class="form-control" type="file" accept=".csv" @change="onFileChange">
+          <div class="col-md-5">
+            <label class="form-label fw-bold small text-muted">📁 更新歷史數據 (CSV)</label>
+            <input class="form-control" type="file" accept=".csv" @change="onFileChange" ref="fileInput">
           </div>
           <div class="col-md-2">
             <button class="btn btn-primary w-100 fw-bold" @click="processCSV" :disabled="!selectedFile">
-              🚀 送出繪圖
+              🚀 載入新檔
+            </button>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-outline-danger w-100 fw-bold" @click="clearCache" :disabled="!hasCachedData">
+              🗑️ 清除記憶
             </button>
           </div>
         </div>
@@ -88,14 +96,39 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 
 const errorMsg = ref('');
 const historyList = ref([]);
 const selectedSymbol = ref('TMF');
 const selectedFile = ref(null);
+const fileInput = ref(null);
+const hasCachedData = ref(false); // 標記是否擁有記憶體資料
 
 let chartInstance = null;
+const CACHE_KEY = 'macrowave_tmf_cache_v1';
+
+// 🚀 網頁一打開，立刻去 localStorage 尋找記憶
+onMounted(async () => {
+    const cachedData = localStorage.getItem(CACHE_KEY);
+    if (cachedData) {
+        try {
+            const parsedData = JSON.parse(cachedData);
+            if (parsedData && parsedData.length > 0) {
+                historyList.value = parsedData;
+                hasCachedData.value = true;
+                
+                // 圖表需要由舊到新
+                const chartData = [...parsedData].reverse();
+                await nextTick();
+                renderChart(chartData);
+            }
+        } catch (err) {
+            console.error("記憶體資料損毀，自動清除", err);
+            localStorage.removeItem(CACHE_KEY);
+        }
+    }
+});
 
 // 當使用者選取檔案時
 const onFileChange = (event) => {
@@ -109,7 +142,7 @@ const onFileChange = (event) => {
     }
 };
 
-// 點擊送出按鈕，開始解析 CSV
+// 點擊送出按鈕，開始解析 CSV 並寫入記憶體
 const processCSV = () => {
     if (!selectedFile.value) return;
 
@@ -126,6 +159,10 @@ const processCSV = () => {
             // 依日期由新到舊排序 (用於表格呈現)
             parsedData.sort((a, b) => new Date(b.date) - new Date(a.date));
             historyList.value = parsedData;
+            hasCachedData.value = true;
+
+            // 🔥 核心功能：將解析完的資料寫入瀏覽器永久記憶體
+            localStorage.setItem(CACHE_KEY, JSON.stringify(parsedData));
 
             // 圖表需要由舊到新
             const chartData = [...parsedData].reverse();
@@ -133,18 +170,35 @@ const processCSV = () => {
             await nextTick();
             renderChart(chartData);
             
+            errorMsg.value = '';
         } catch (err) {
             errorMsg.value = "解析失敗：" + err.message;
         }
     };
-    
-    // 讀取檔案為文字字串
     reader.readAsText(selectedFile.value);
+};
+
+// 🗑️ 清除記憶體功能
+const clearCache = () => {
+    localStorage.removeItem(CACHE_KEY);
+    historyList.value = [];
+    hasCachedData.value = false;
+    errorMsg.value = '';
+    
+    if (chartInstance) {
+        chartInstance.dispose();
+        chartInstance = null;
+    }
+    
+    // 清空選擇的檔案
+    selectedFile.value = null;
+    if (fileInput.value) {
+        fileInput.value.value = '';
+    }
 };
 
 // CSV 解析邏輯
 const parseCSVText = (csvText) => {
-    // 處理換行符號 (Windows \r\n 或 Mac/Linux \n)
     const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length < 2) throw new Error("CSV 缺乏標題或數據。");
 
@@ -152,16 +206,14 @@ const parseCSVText = (csvText) => {
     const data = [];
 
     for (let i = 1; i < lines.length; i++) {
-        // 使用正規表示式來處理可能帶有引號的逗號分隔值 (簡易版)
         const values = lines[i].split(',');
-        if (values.length < 5) continue; // 略過空白或損毀行
+        if (values.length < 5) continue;
 
         const row = {};
         headers.forEach((header, index) => {
             row[header] = values[index] ? values[index].trim() : '';
         });
 
-        // 轉換為數字格式 (依照您上傳的欄位名稱)
         data.push({
             date: row['日期'],
             totalOI: parseInt(row['Total_OI'] || 0),
@@ -195,7 +247,7 @@ const renderChart = (data) => {
         const val = item.retailRatio * 100;
         return {
             value: val.toFixed(2),
-            itemStyle: { color: val < 0 ? '#198754' : '#dc3545' } // 台灣習慣：綠色做空，紅色做多
+            itemStyle: { color: val < 0 ? '#198754' : '#dc3545' } 
         };
     });
 
@@ -216,7 +268,7 @@ const renderChart = (data) => {
             { type: 'value', gridIndex: 1, name: '多空比(%)', splitLine: { show: true, lineStyle: { type: 'dashed' } } }
         ],
         dataZoom: [
-            { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 }, 
+            { type: 'inside', xAxisIndex: [0, 1], start: 70, end: 100 }, 
             { show: true, xAxisIndex: [0, 1], top: '92%', height: 15 }
         ], 
         series: [
