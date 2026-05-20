@@ -70,21 +70,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue'
+// 🔥 關鍵修正 1：正式將 ECharts 引入組件
+import * as echarts from 'echarts'
 
 const isLoading = ref(true);
 const errorMsg = ref('');
 const historyList = ref([]);
 let chartInstance = null;
 
-// 🔥 呼叫 Nuxt 內建的 Supabase Client
+// 呼叫 Nuxt 內建的 Supabase Client
 const supabase = useSupabaseClient();
 
 onMounted(async () => {
     try {
         isLoading.value = true;
         
-        // 透過 Supabase 直接撈取 tmf_data 表格，並依照日期由新到舊排序
         const { data, error } = await supabase
             .from('tmf_data')
             .select('*')
@@ -98,7 +99,6 @@ onMounted(async () => {
             throw new Error('Supabase 資料庫中目前無數據，請執行 Python 爬蟲上傳。');
         }
 
-        // 將資料庫的 snake_case 轉換為前端圖表慣用的駝峰命名
         historyList.value = data.map(row => ({
             date: row.date,
             totalOI: row.total_oi,
@@ -111,11 +111,13 @@ onMounted(async () => {
             close: row.close
         }));
 
-        // 圖表需要由舊到新繪製，所以把陣列反轉
         const chartData = [...historyList.value].reverse();
         
         await nextTick();
         renderChart(chartData);
+        
+        // 🔥 關鍵優化：監聽視窗大小改變，讓圖表跟著縮放 (RWD)
+        window.addEventListener('resize', handleResize);
         
     } catch (err) {
         console.error('Supabase 讀取錯誤:', err);
@@ -125,16 +127,32 @@ onMounted(async () => {
     }
 });
 
-// ECharts 繪圖邏輯 (與先前完全相同)
+// 離開頁面時，記得清除監聽器與圖表實體，避免記憶體流失
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', handleResize);
+    if (chartInstance) {
+        chartInstance.dispose();
+    }
+});
+
+const handleResize = () => {
+    if (chartInstance) {
+        chartInstance.resize();
+    }
+};
+
+// ECharts 繪圖邏輯
 const renderChart = (data) => {
     const dom = document.getElementById('chart-tmf');
-    if (!dom || !window.echarts) {
-        errorMsg.value = "找不到 ECharts 圖表元件，請確認全域已引入。";
+    if (!dom) {
+        errorMsg.value = "找不到圖表容器 (DOM)。";
         return;
     }
 
     if (chartInstance) chartInstance.dispose();
-    chartInstance = window.echarts.init(dom);
+    
+    // 🔥 關鍵修正 2：直接使用剛剛引入的 echarts，而不是 window.echarts
+    chartInstance = echarts.init(dom);
 
     const categoryData = data.map(item => item.date);
     const candleValues = data.map(item => [item.open, item.close, item.low, item.high]);
