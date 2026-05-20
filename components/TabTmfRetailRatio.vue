@@ -71,7 +71,6 @@
 
 <script setup>
 import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue'
-// 🔥 關鍵修正 1：正式將 ECharts 引入組件
 import * as echarts from 'echarts'
 
 const isLoading = ref(true);
@@ -79,7 +78,6 @@ const errorMsg = ref('');
 const historyList = ref([]);
 let chartInstance = null;
 
-// 呼叫 Nuxt 內建的 Supabase Client
 const supabase = useSupabaseClient();
 
 onMounted(async () => {
@@ -96,7 +94,7 @@ onMounted(async () => {
         }
 
         if (!data || data.length === 0) {
-            throw new Error('Supabase 資料庫中目前無數據，請執行 Python 爬蟲上傳。');
+            throw new Error('Supabase 資料庫中目前無數據。');
         }
 
         historyList.value = data.map(row => ({
@@ -110,24 +108,26 @@ onMounted(async () => {
             low: row.low,
             close: row.close
         }));
-
-        const chartData = [...historyList.value].reverse();
-        
-        await nextTick();
-        renderChart(chartData);
-        
-        // 🔥 關鍵優化：監聽視窗大小改變，讓圖表跟著縮放 (RWD)
-        window.addEventListener('resize', handleResize);
         
     } catch (err) {
         console.error('Supabase 讀取錯誤:', err);
         errorMsg.value = err.message || '無法連線至 Supabase 資料庫';
     } finally {
+        // 🔥 關鍵修正：先關閉 isLoading，讓 Vue 開始渲染 DOM
         isLoading.value = false;
+        
+        // 如果有資料，才準備畫圖
+        if (historyList.value.length > 0) {
+            // 🔥 關鍵修正：必須等 Vue 確實把 DOM 畫出來 (nextTick) 之後，再呼叫畫圖函數
+            await nextTick();
+            const chartData = [...historyList.value].reverse();
+            renderChart(chartData);
+        }
     }
+    
+    window.addEventListener('resize', handleResize);
 });
 
-// 離開頁面時，記得清除監聽器與圖表實體，避免記憶體流失
 onBeforeUnmount(() => {
     window.removeEventListener('resize', handleResize);
     if (chartInstance) {
@@ -141,17 +141,19 @@ const handleResize = () => {
     }
 };
 
-// ECharts 繪圖邏輯
 const renderChart = (data) => {
+    // 加上額外的防呆，確保 DOM 真的存在
     const dom = document.getElementById('chart-tmf');
     if (!dom) {
-        errorMsg.value = "找不到圖表容器 (DOM)。";
+        console.error("嚴重錯誤：經過 nextTick 依然找不到 chart-tmf 容器");
+        errorMsg.value = "系統錯誤：無法渲染圖表，請重新整理網頁。";
         return;
     }
 
-    if (chartInstance) chartInstance.dispose();
+    if (chartInstance) {
+        chartInstance.dispose();
+    }
     
-    // 🔥 關鍵修正 2：直接使用剛剛引入的 echarts，而不是 window.echarts
     chartInstance = echarts.init(dom);
 
     const categoryData = data.map(item => item.date);
