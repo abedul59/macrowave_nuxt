@@ -22,9 +22,25 @@
     <div v-if="!isLoading && historyList.length > 0">
         
         <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-                <span>📈 價格走勢與散戶籌碼對照圖</span>
-                <span class="badge bg-primary">滑鼠滾輪可縮放區間</span>
+            <div class="card-header bg-white p-3">
+                <div class="row align-items-center">
+                    <div class="col-md-4 mb-2 mb-md-0">
+                        <span class="fw-bold">📈 價格走勢與散戶籌碼對照圖</span>
+                        <span class="badge bg-primary ms-2">滾輪縮放</span>
+                    </div>
+                    <div class="col-md-8 d-flex justify-content-md-end align-items-center gap-3 flex-wrap">
+                        <div class="input-group input-group-sm" style="max-width: 180px;">
+                            <span class="input-group-text bg-danger text-white fw-bold">買進界線</span>
+                            <input type="number" class="form-control text-center" v-model.number="buyThreshold" @change="updateThresholds">
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <div class="input-group input-group-sm" style="max-width: 180px;">
+                            <span class="input-group-text bg-success text-white fw-bold">賣出界線</span>
+                            <input type="number" class="form-control text-center" v-model.number="sellThreshold" @change="updateThresholds">
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="card-body p-2">
                 <div id="chart-tmf" style="width: 100%; height: 600px;"></div>
@@ -78,6 +94,10 @@ const errorMsg = ref('');
 const historyList = ref([]);
 let chartInstance = null;
 
+// 🔥 新增：綁定買賣界線的預設值 (可動態修改)
+const buyThreshold = ref(-10);
+const sellThreshold = ref(15);
+
 const supabase = useSupabaseClient();
 
 onMounted(async () => {
@@ -113,12 +133,9 @@ onMounted(async () => {
         console.error('Supabase 讀取錯誤:', err);
         errorMsg.value = err.message || '無法連線至 Supabase 資料庫';
     } finally {
-        // 🔥 關鍵修正：先關閉 isLoading，讓 Vue 開始渲染 DOM
         isLoading.value = false;
         
-        // 如果有資料，才準備畫圖
         if (historyList.value.length > 0) {
-            // 🔥 關鍵修正：必須等 Vue 確實把 DOM 畫出來 (nextTick) 之後，再呼叫畫圖函數
             await nextTick();
             const chartData = [...historyList.value].reverse();
             renderChart(chartData);
@@ -141,14 +158,17 @@ const handleResize = () => {
     }
 };
 
-const renderChart = (data) => {
-    // 加上額外的防呆，確保 DOM 真的存在
-    const dom = document.getElementById('chart-tmf');
-    if (!dom) {
-        console.error("嚴重錯誤：經過 nextTick 依然找不到 chart-tmf 容器");
-        errorMsg.value = "系統錯誤：無法渲染圖表，請重新整理網頁。";
-        return;
+// 🔥 新增：當使用者修改界線值後，重新觸發繪圖函數更新畫面
+const updateThresholds = () => {
+    if (historyList.value.length > 0) {
+        const chartData = [...historyList.value].reverse();
+        renderChart(chartData);
     }
+};
+
+const renderChart = (data) => {
+    const dom = document.getElementById('chart-tmf');
+    if (!dom) return;
 
     if (chartInstance) {
         chartInstance.dispose();
@@ -198,8 +218,9 @@ const renderChart = (data) => {
                     symbol: 'none',
                     label: { position: 'insideEndTop', formatter: '{b}' },
                     data: [
-                        { yAxis: -10, name: '買進', lineStyle: { color: '#dc3545', type: 'solid', width: 2 } },
-                        { yAxis: 15, name: '賣出', lineStyle: { color: '#198754', type: 'solid', width: 2 } }
+                        // 🔥 關鍵連動：使用 v-model 綁定的動態變數繪製標記線
+                        { yAxis: buyThreshold.value, name: '買進', lineStyle: { color: '#dc3545', type: 'solid', width: 2 } },
+                        { yAxis: sellThreshold.value, name: '賣出', lineStyle: { color: '#198754', type: 'solid', width: 2 } }
                     ]
                 }
             }
