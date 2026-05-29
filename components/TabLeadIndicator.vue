@@ -84,7 +84,6 @@
     </div>
   </div>
 </template>
-
 <script setup>
 import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue';
 import * as echarts from 'echarts';
@@ -101,7 +100,6 @@ onMounted(async () => {
   try {
     isLoading.value = true;
     
-    // 1. 抓取資料庫資料
     const { data, error } = await supabase
       .from('macro_lead_0050')
       .select('*')
@@ -110,21 +108,18 @@ onMounted(async () => {
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error('資料庫目前無數據。');
 
-    // 2. 終極資料清洗槽 (確保產出絕對純淨的陣列)
     const cleanData = [];
     data.forEach(item => {
-      // 確保日期是 YYYY-MM-DD
       const d = item.date ? String(item.date).split('T')[0] : '';
       if (!d) return;
 
       const c = Number(item.close);
-      if (isNaN(c)) return; // 沒有收盤價的爛資料直接丟棄
+      if (isNaN(c)) return; 
 
       let o = Number(item.open); if (isNaN(o)) o = c;
       let h = Number(item.high); if (isNaN(h)) h = c;
       let l = Number(item.low);  if (isNaN(l)) l = c;
 
-      // 強制修正最高最低價邏輯，杜絕 K 線圖崩潰
       const realHigh = Math.max(o, c, h, l);
       const realLow = Math.min(o, c, h, l);
 
@@ -142,7 +137,6 @@ onMounted(async () => {
       });
     });
 
-    // 3. 策略回測引擎
     let currentPosition = 1; 
     const processedData = [];
     const tradeRecords = [];
@@ -178,7 +172,6 @@ onMounted(async () => {
     chartDataList.value = processedData;
     trades.value = tradeRecords;
 
-    // 4. 啟動繪圖引擎
     await nextTick();
     renderChart(processedData, tradeRecords);
     window.addEventListener('resize', handleResize);
@@ -207,55 +200,69 @@ const renderChart = (data, tradeRecords) => {
   if (chartInstance) chartInstance.dispose();
   chartInstance = echarts.init(dom);
 
-  // 抽出各維度陣列
   const dates = data.map(item => item.date);
   const kLineData = data.map(item => [item.open, item.close, item.low, item.high]);
   const leadData = data.map(item => item.lead);
 
-  // 整理持倉區間 (背景橘色塊)
+  // 🔥 修正 1：持倉區間 (背景橘色塊) 強制使用 Index
   const holdingAreas = [];
   let startHoldDate = null;
   for (let i = 0; i < data.length; i++) {
     if (data[i].position === 1 && startHoldDate === null) {
       startHoldDate = data[i].date;
     } else if (data[i].position === 0 && startHoldDate !== null) {
-      holdingAreas.push([{ xAxis: startHoldDate }, { xAxis: data[i - 1].date }]);
+      const sIdx = dates.indexOf(startHoldDate);
+      const eIdx = dates.indexOf(data[i - 1].date);
+      if (sIdx !== -1 && eIdx !== -1) {
+        holdingAreas.push([{ xAxis: sIdx }, { xAxis: eIdx }]);
+      }
       startHoldDate = null;
     }
   }
-  if (startHoldDate !== null) holdingAreas.push([{ xAxis: startHoldDate }, { xAxis: data[data.length - 1].date }]);
-
-  // 🔥 獨立生成 K線圖的標記點 (使用 ECharts 官方最穩定的 String x 軸綁定法)
-  const klineMarks = tradeRecords.map(t => ({
-    coord: [t.date, t.price],
-    value: t.type,
-    symbol: t.type === 'BUY' ? 'arrow' : 'pin',
-    symbolSize: 15,
-    symbolRotate: t.type === 'BUY' ? 0 : 180,
-    itemStyle: { color: t.type === 'BUY' ? '#198754' : '#dc3545' },
-    label: { show: false }
-  }));
-
-  // 🔥 獨立生成 領先指標的散點圖層 (專門用來標示大箭頭)
-  const leadScatterData = tradeRecords.map(t => ({
-    value: [t.date, t.lead], // Scatter 格式：[x, y]
-    symbol: t.type === 'BUY' ? 'arrow' : 'pin',
-    symbolSize: 18,
-    symbolRotate: t.type === 'BUY' ? 0 : 180,
-    itemStyle: { 
-      color: t.type === 'BUY' ? '#198754' : '#dc3545',
-      borderColor: '#fff', 
-      borderWidth: 2 
+  if (startHoldDate !== null) {
+    const sIdx = dates.indexOf(startHoldDate);
+    if (sIdx !== -1) {
+      holdingAreas.push([{ xAxis: sIdx }, { xAxis: dates.length - 1 }]);
     }
-  }));
+  }
+
+  // 🔥 修正 2：K線圖買賣箭頭 強制使用 Index
+  const klineMarks = tradeRecords.map(t => {
+    const xIndex = dates.indexOf(t.date);
+    return {
+      coord: [xIndex, t.price],
+      value: t.type,
+      symbol: t.type === 'BUY' ? 'arrow' : 'pin',
+      symbolSize: 15,
+      symbolRotate: t.type === 'BUY' ? 0 : 180,
+      itemStyle: { color: t.type === 'BUY' ? '#198754' : '#dc3545' },
+      label: { show: false }
+    };
+  }).filter(m => m.coord[0] !== -1); // 過濾掉找不到位置的例外
+
+  // 🔥 修正 3：領先指標散點圖層 強制使用 Index
+  const leadScatterData = tradeRecords.map(t => {
+    const xIndex = dates.indexOf(t.date);
+    return {
+      value: [xIndex, t.lead],
+      symbol: t.type === 'BUY' ? 'arrow' : 'pin',
+      symbolSize: 18,
+      symbolRotate: t.type === 'BUY' ? 0 : 180,
+      itemStyle: { 
+        color: t.type === 'BUY' ? '#198754' : '#dc3545',
+        borderColor: '#fff', 
+        borderWidth: 2 
+      }
+    };
+  }).filter(m => m.value[0] !== -1);
 
   const option = {
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     legend: { data: ['0050 月K線', '領先指標', '交易信號'], top: 10 },
     grid: [
-      { left: '8%', right: '5%', top: '10%', height: '50%' }, // K線區 (上半)
-      { left: '8%', right: '5%', top: '68%', height: '25%' }  // 指標區 (下半)
+      { left: '8%', right: '5%', top: '10%', height: '50%' }, 
+      { left: '8%', right: '5%', top: '68%', height: '25%' }  
     ],
     xAxis: [
       { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },
@@ -270,7 +277,6 @@ const renderChart = (data, tradeRecords) => {
       { show: true, xAxisIndex: [0, 1], top: '95%', height: 15 }
     ],
     series: [
-      // 1. 0050 K線圖
       {
         name: '0050 月K線',
         type: 'candlestick',
@@ -278,8 +284,8 @@ const renderChart = (data, tradeRecords) => {
         yAxisIndex: 0,
         data: kLineData,
         itemStyle: {
-          color: '#dc3545', // 收盤 > 開盤 (紅)
-          color0: '#198754', // 收盤 < 開盤 (綠)
+          color: '#dc3545', 
+          color0: '#198754', 
           borderColor: '#dc3545',
           borderColor0: '#198754'
         },
@@ -287,7 +293,6 @@ const renderChart = (data, tradeRecords) => {
           data: klineMarks
         }
       },
-      // 2. 領先指標 (基礎折線與所有點位)
       {
         name: '領先指標',
         type: 'line',
@@ -297,7 +302,7 @@ const renderChart = (data, tradeRecords) => {
         lineStyle: { color: '#0d6efd', width: 2 },
         showSymbol: true,
         symbol: 'circle',
-        symbolSize: 6, // 顯示每一個資料點
+        symbolSize: 6,
         itemStyle: { color: '#0d6efd' },
         markLine: {
           symbol: 'none',
@@ -308,14 +313,13 @@ const renderChart = (data, tradeRecords) => {
           data: holdingAreas
         }
       },
-      // 3. 領先指標信號層 (強勢覆蓋在折線之上)
       {
         name: '交易信號',
         type: 'scatter',
         xAxisIndex: 1,
         yAxisIndex: 1,
         data: leadScatterData,
-        zlevel: 10 // 確保箭頭圖層疊在最上面
+        zlevel: 10 
       }
     ]
   };
