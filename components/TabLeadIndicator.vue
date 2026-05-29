@@ -99,11 +99,8 @@ onMounted(async () => {
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       
-      // 🔥 關鍵修復：強制剪掉 Supabase 帶來的 "T00:00:00Z" 尾巴，確保純淨的 YYYY-MM-DD
       const cleanDate = String(row.date || '').substring(0, 10);
-      
-      const closeRaw = row.close ?? row.Close ?? row.CLOSE;
-      const closePrice = parseFloat(closeRaw);
+      const closePrice = parseFloat(row.close ?? row.Close ?? row.CLOSE);
       
       if (isNaN(closePrice)) continue;
 
@@ -148,7 +145,6 @@ onMounted(async () => {
         }
       }
 
-      // 存入清理過日期的資料
       processedData.push({
         date: cleanDate,
         open: openPrice,
@@ -195,25 +191,57 @@ const renderChart = (data, tradeRecords) => {
 
   const dates = data.map(item => item.date);
   
-  // 確保給 ECharts 的 K 線資料是純數字陣列 [開, 收, 低, 高]
-  const kLineData = data.map(item => [
-    Number(item.open), 
-    Number(item.close), 
-    Number(item.low), 
-    Number(item.high)
-  ]);
+  // 🔥 關鍵修正 1：K 線防崩潰機制 (強制校正最高與最低價)
+  const kLineData = data.map(item => {
+    let o = item.open;
+    let c = item.close;
+    let l = item.low;
+    let h = item.high;
+    // 取四者極值，保證 High 永遠大於等於 Low，徹底杜絕 ECharts 罷工
+    let trueHigh = Math.max(o, c, l, h);
+    let trueLow = Math.min(o, c, l, h);
+    return [o, c, trueLow, trueHigh]; 
+  });
   
-  const leadData = data.map(item => item.lead);
+  // 🔥 關鍵修正 2：領先指標全顯與動態買賣標記
+  const leadData = data.map(item => {
+    // 檢查這一天是否剛好有交易信號
+    const trade = tradeRecords.find(t => t.date === item.date);
+    if (trade) {
+      return {
+        value: item.lead,
+        // 買進用正箭頭，賣出用大頭針
+        symbol: trade.type === 'BUY' ? 'arrow' : 'pin',
+        symbolSize: 14, // 放大信號點
+        symbolRotate: trade.type === 'BUY' ? 0 : 180,
+        itemStyle: {
+          color: trade.type === 'BUY' ? '#198754' : '#dc3545', // 綠買紅賣
+          borderColor: '#fff',
+          borderWidth: 1.5
+        }
+      };
+    }
+    // 平常的日子顯示小圓點
+    return {
+      value: item.lead,
+      symbol: 'circle',
+      symbolSize: 4,
+      itemStyle: { color: '#0d6efd' } // 預設藍色
+    };
+  });
 
+  // 🔥 關鍵修正 3：使用精準的陣列 Index 定位，不再依賴字串比對
   const markPointData = tradeRecords.map(t => {
+    const xIndex = dates.indexOf(t.date); // 找出該日期在 X 軸的絕對位置 (0, 1, 2...)
     return {
       name: t.type,
-      coord: [t.date, t.price],
+      coord: [xIndex, t.price], // 傳入數值座標，百發百中
       value: t.type,
       itemStyle: { color: t.type === 'BUY' ? '#198754' : '#dc3545' },
       symbol: t.type === 'BUY' ? 'arrow' : 'pin',
       symbolSize: t.type === 'BUY' ? 15 : 20,
       symbolRotate: t.type === 'BUY' ? 0 : 180,
+      symbolOffset: [0, t.type === 'BUY' ? 15 : -15], // 讓箭頭稍微浮起，避免擋住 K 線
       label: { show: false }
     };
   });
@@ -269,7 +297,7 @@ const renderChart = (data, tradeRecords) => {
         yAxisIndex: 1,
         data: leadData,
         lineStyle: { color: '#0d6efd', width: 2 },
-        showSymbol: false,
+        showSymbol: true, // 開啟每個資料點的顯示
         markLine: {
           symbol: 'none',
           data: [{ yAxis: 100, name: '100基準線', lineStyle: { color: '#dc3545', type: 'dashed' } }]
