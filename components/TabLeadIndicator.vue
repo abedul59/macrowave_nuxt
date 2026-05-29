@@ -1,66 +1,83 @@
 <template>
-  <div class="container pb-5 mt-4">
-    <div class="card shadow-sm border-0 mb-4 bg-light">
-      <div class="card-body">
-        <h5 class="fw-bold text-primary mb-2">📊 台灣領先指標 ╳ 0050 交易策略</h5>
-        <p class="text-muted small mb-0">
-          策略邏輯：當 (景氣分數 ≤ 22 且 領先指標回升) 或 (領先指標 > 100) 時買進；當 (領先指標 < 100 且 領先指標下滑) 時賣出。
-        </p>
+  <div class="container-fluid pb-5 mt-4">
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card shadow-sm border-0 bg-dark text-white">
+          <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+              <h4 class="fw-bold mb-1">📊 台灣領先指標 ╳ 0050 總經戰情室</h4>
+              <p class="text-secondary mb-0 small">
+                自動化量化策略：景氣分數 ≤ 22 且回升 (或指標 > 100) 買進；指標 < 100 且下滑賣出。
+              </p>
+            </div>
+            <div class="text-end" v-if="!isLoading && trades.length > 0">
+              <span class="badge bg-secondary fs-6 me-2">回測筆數：{{ chartDataList.length }} 個月</span>
+              <span class="badge bg-primary fs-6">觸發交易：{{ trades.length }} 次</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div v-if="isLoading" class="text-center my-5">
-      <div class="spinner-border text-primary" role="status"></div>
-      <p class="mt-3 fw-bold text-primary">載入回測數據與籌碼資料中...</p>
+    <div v-if="isLoading" class="text-center my-5 py-5">
+      <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+      <h5 class="mt-4 fw-bold text-primary">系統正在載入並清洗回測數據...</h5>
     </div>
 
-    <div v-if="errorMsg" class="alert alert-danger fw-bold text-center">
+    <div v-if="errorMsg" class="alert alert-danger shadow-sm fw-bold text-center fs-5">
       ❌ 讀取失敗：{{ errorMsg }}
     </div>
 
-    <div v-if="!isLoading && chartDataList.length > 0">
-      
-      <div class="card shadow-sm border-0 mb-4">
-        <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
-          <span>📈 0050 K線走勢與領先指標對照圖</span>
-          <span class="badge bg-primary">滑鼠滾輪可縮放區間</span>
-        </div>
-        <div class="card-body p-2">
-          <div id="chart-lead-0050" style="width: 100%; height: 800px;"></div>
+    <div v-show="!isLoading && chartDataList.length > 0" class="row">
+      <div class="col-lg-12 mb-4">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-white fw-bold py-3 d-flex justify-content-between">
+            <span class="text-dark">📈 策略回測圖表 (支援滾輪縮放)</span>
+            <span class="badge bg-success">🟢 買進標記</span>
+            <span class="badge bg-danger">🔴 賣出標記</span>
+          </div>
+          <div class="card-body p-2">
+            <div id="chart-lead-0050" style="width: 100%; height: 800px;"></div>
+          </div>
         </div>
       </div>
 
-      <div class="card shadow-sm border-0 mb-4">
-        <div class="card-header bg-secondary text-white fw-bold d-flex justify-content-between">
-          <span>📜 歷史交易信號明細</span>
-          <span class="badge bg-light text-dark">共 {{ trades.length }} 筆交易</span>
-        </div>
-        <div class="card-body p-0">
-          <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-            <table class="table table-hover table-striped mb-0 text-center align-middle" style="font-size: 0.9rem;">
-              <thead class="table-light sticky-top">
-                <tr>
-                  <th>交易日期</th>
-                  <th>動作</th>
-                  <th>觸發價格 (0050)</th>
-                  <th>當時領先指標</th>
-                  <th>當時景氣分數</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(t, index) in trades.slice().reverse()" :key="index">
-                  <td class="text-muted fw-bold">{{ t.date }}</td>
-                  <td>
-                    <span :class="t.type === 'BUY' ? 'badge bg-success' : 'badge bg-danger'">
-                      {{ t.type === 'BUY' ? '買進 (BUY)' : '賣出 (SELL)' }}
-                    </span>
-                  </td>
-                  <td class="text-dark fw-bold">{{ t.price.toFixed(2) }}</td>
-                  <td>{{ t.lead.toFixed(2) }}</td>
-                  <td>{{ t.score }}</td>
-                </tr>
-              </tbody>
-            </table>
+      <div class="col-lg-12">
+        <div class="card shadow-sm border-0">
+          <div class="card-header bg-white fw-bold py-3">
+            <span class="text-dark">📜 歷史交易信號明細 (由新到舊)</span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+              <table class="table table-hover table-striped mb-0 text-center align-middle">
+                <thead class="table-dark sticky-top">
+                  <tr>
+                    <th>交易年月</th>
+                    <th>信號動作</th>
+                    <th>觸發價格 (0050)</th>
+                    <th>領先指標</th>
+                    <th>景氣分數</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(t, index) in trades.slice().reverse()" :key="index">
+                    <td class="fw-bold">{{ t.date }}</td>
+                    <td>
+                      <span :class="t.type === 'BUY' ? 'badge bg-success fs-6' : 'badge bg-danger fs-6'">
+                        {{ t.type === 'BUY' ? '買進 (BUY)' : '賣出 (SELL)' }}
+                      </span>
+                    </td>
+                    <td class="fw-bold text-primary">{{ t.price.toFixed(2) }}</td>
+                    <td>{{ t.lead.toFixed(2) }}</td>
+                    <td>
+                      <span :class="t.score <= 22 ? 'text-primary fw-bold' : 'text-dark'">
+                        {{ t.score }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -84,51 +101,61 @@ onMounted(async () => {
   try {
     isLoading.value = true;
     
+    // 1. 抓取資料庫資料
     const { data, error } = await supabase
       .from('macro_lead_0050')
       .select('*')
       .order('date', { ascending: true }); 
 
     if (error) throw new Error(error.message);
-    if (!data || data.length === 0) throw new Error('資料庫中目前無數據，請先上傳整合好的資料。');
+    if (!data || data.length === 0) throw new Error('資料庫目前無數據。');
 
+    // 2. 終極資料清洗槽 (確保產出絕對純淨的陣列)
+    const cleanData = [];
+    data.forEach(item => {
+      // 確保日期是 YYYY-MM-DD
+      const d = item.date ? String(item.date).split('T')[0] : '';
+      if (!d) return;
+
+      const c = Number(item.close);
+      if (isNaN(c)) return; // 沒有收盤價的爛資料直接丟棄
+
+      let o = Number(item.open); if (isNaN(o)) o = c;
+      let h = Number(item.high); if (isNaN(h)) h = c;
+      let l = Number(item.low);  if (isNaN(l)) l = c;
+
+      // 強制修正最高最低價邏輯，杜絕 K 線圖崩潰
+      const realHigh = Math.max(o, c, h, l);
+      const realLow = Math.min(o, c, h, l);
+
+      let lead = Number(item.lead); if (isNaN(lead)) lead = 0;
+      let score = Number(item.score); if (isNaN(score)) score = 0;
+
+      cleanData.push({
+        date: d,
+        open: o,
+        close: c,
+        low: realLow,
+        high: realHigh,
+        lead: lead,
+        score: score
+      });
+    });
+
+    // 3. 策略回測引擎
     let currentPosition = 1; 
     const processedData = [];
     const tradeRecords = [];
 
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
+    for (let i = 0; i < cleanData.length; i++) {
+      const row = cleanData[i];
+      const prevRow = i > 0 ? cleanData[i - 1] : row;
+      const leadDiff = row.lead - prevRow.lead;
       
-      const cleanDate = String(row.date || '').substring(0, 10);
-      const closePrice = parseFloat(row.close ?? row.Close ?? row.CLOSE);
-      
-      if (isNaN(closePrice)) continue;
-
-      let openPrice = parseFloat(row.open ?? row.Open ?? row.OPEN);
-      openPrice = isNaN(openPrice) ? closePrice : openPrice;
-
-      let lowPrice = parseFloat(row.low ?? row.Low ?? row.LOW);
-      lowPrice = isNaN(lowPrice) ? closePrice : lowPrice;
-
-      let highPrice = parseFloat(row.high ?? row.High ?? row.HIGH);
-      highPrice = isNaN(highPrice) ? closePrice : highPrice;
-
-      const leadValue = parseFloat(row.lead ?? row.Lead);
-      const scoreValue = parseInt(row.score ?? row.Score);
-
-      const safeLead = isNaN(leadValue) ? 0 : leadValue;
-      const safeScore = isNaN(scoreValue) ? 0 : scoreValue;
-
-      const prevRow = i > 0 ? data[i - 1] : row;
-      const prevLeadRaw = parseFloat(prevRow.lead ?? prevRow.Lead);
-      const prevLeadValue = i > 0 && !isNaN(prevLeadRaw) ? prevLeadRaw : safeLead;
-      
-      const leadDiff = safeLead - prevLeadValue;
       let signal = null;
-      
-      if ((safeScore <= 22 && leadDiff > 0) || safeLead > 100) {
+      if ((row.score <= 22 && leadDiff > 0) || row.lead > 100) {
         signal = 1;
-      } else if (safeLead < 100 && leadDiff < 0) {
+      } else if (row.lead < 100 && leadDiff < 0) {
         signal = 0;
       }
 
@@ -139,35 +166,26 @@ onMounted(async () => {
       if (i > 0) {
         const prevPosition = processedData[i - 1].position;
         if (currentPosition === 1 && prevPosition === 0) {
-          tradeRecords.push({ date: cleanDate, type: 'BUY', price: closePrice, lead: safeLead, score: safeScore });
+          tradeRecords.push({ date: row.date, type: 'BUY', price: row.close, lead: row.lead, score: row.score });
         } else if (currentPosition === 0 && prevPosition === 1) {
-          tradeRecords.push({ date: cleanDate, type: 'SELL', price: closePrice, lead: safeLead, score: safeScore });
+          tradeRecords.push({ date: row.date, type: 'SELL', price: row.close, lead: row.lead, score: row.score });
         }
       }
 
-      processedData.push({
-        date: cleanDate,
-        open: openPrice,
-        close: closePrice,
-        low: lowPrice,
-        high: highPrice,
-        lead: safeLead,
-        score: safeScore,
-        position: currentPosition
-      });
+      processedData.push({ ...row, position: currentPosition });
     }
 
     chartDataList.value = processedData;
     trades.value = tradeRecords;
 
+    // 4. 啟動繪圖引擎
     await nextTick();
     renderChart(processedData, tradeRecords);
-    
     window.addEventListener('resize', handleResize);
 
   } catch (err) {
     console.error('資料讀取錯誤:', err);
-    errorMsg.value = err.message || '無法連線至資料庫';
+    errorMsg.value = err.message;
   } finally {
     isLoading.value = false;
   }
@@ -189,63 +207,12 @@ const renderChart = (data, tradeRecords) => {
   if (chartInstance) chartInstance.dispose();
   chartInstance = echarts.init(dom);
 
+  // 抽出各維度陣列
   const dates = data.map(item => item.date);
-  
-  // 🔥 關鍵修正 1：K 線防崩潰機制 (強制校正最高與最低價)
-  const kLineData = data.map(item => {
-    let o = item.open;
-    let c = item.close;
-    let l = item.low;
-    let h = item.high;
-    // 取四者極值，保證 High 永遠大於等於 Low，徹底杜絕 ECharts 罷工
-    let trueHigh = Math.max(o, c, l, h);
-    let trueLow = Math.min(o, c, l, h);
-    return [o, c, trueLow, trueHigh]; 
-  });
-  
-  // 🔥 關鍵修正 2：領先指標全顯與動態買賣標記
-  const leadData = data.map(item => {
-    // 檢查這一天是否剛好有交易信號
-    const trade = tradeRecords.find(t => t.date === item.date);
-    if (trade) {
-      return {
-        value: item.lead,
-        // 買進用正箭頭，賣出用大頭針
-        symbol: trade.type === 'BUY' ? 'arrow' : 'pin',
-        symbolSize: 14, // 放大信號點
-        symbolRotate: trade.type === 'BUY' ? 0 : 180,
-        itemStyle: {
-          color: trade.type === 'BUY' ? '#198754' : '#dc3545', // 綠買紅賣
-          borderColor: '#fff',
-          borderWidth: 1.5
-        }
-      };
-    }
-    // 平常的日子顯示小圓點
-    return {
-      value: item.lead,
-      symbol: 'circle',
-      symbolSize: 4,
-      itemStyle: { color: '#0d6efd' } // 預設藍色
-    };
-  });
+  const kLineData = data.map(item => [item.open, item.close, item.low, item.high]);
+  const leadData = data.map(item => item.lead);
 
-  // 🔥 關鍵修正 3：使用精準的陣列 Index 定位，不再依賴字串比對
-  const markPointData = tradeRecords.map(t => {
-    const xIndex = dates.indexOf(t.date); // 找出該日期在 X 軸的絕對位置 (0, 1, 2...)
-    return {
-      name: t.type,
-      coord: [xIndex, t.price], // 傳入數值座標，百發百中
-      value: t.type,
-      itemStyle: { color: t.type === 'BUY' ? '#198754' : '#dc3545' },
-      symbol: t.type === 'BUY' ? 'arrow' : 'pin',
-      symbolSize: t.type === 'BUY' ? 15 : 20,
-      symbolRotate: t.type === 'BUY' ? 0 : 180,
-      symbolOffset: [0, t.type === 'BUY' ? 15 : -15], // 讓箭頭稍微浮起，避免擋住 K 線
-      label: { show: false }
-    };
-  });
-
+  // 整理持倉區間 (背景橘色塊)
   const holdingAreas = [];
   let startHoldDate = null;
   for (let i = 0; i < data.length; i++) {
@@ -256,62 +223,115 @@ const renderChart = (data, tradeRecords) => {
       startHoldDate = null;
     }
   }
-  if (startHoldDate !== null) {
-    holdingAreas.push([{ xAxis: startHoldDate }, { xAxis: data[data.length - 1].date }]);
-  }
+  if (startHoldDate !== null) holdingAreas.push([{ xAxis: startHoldDate }, { xAxis: data[data.length - 1].date }]);
 
-  chartInstance.setOption({
+  // 🔥 獨立生成 K線圖的標記點 (使用 ECharts 官方最穩定的 String x 軸綁定法)
+  const klineMarks = tradeRecords.map(t => ({
+    coord: [t.date, t.price],
+    value: t.type,
+    symbol: t.type === 'BUY' ? 'arrow' : 'pin',
+    symbolSize: 15,
+    symbolRotate: t.type === 'BUY' ? 0 : 180,
+    itemStyle: { color: t.type === 'BUY' ? '#198754' : '#dc3545' },
+    label: { show: false }
+  }));
+
+  // 🔥 獨立生成 領先指標的散點圖層 (專門用來標示大箭頭)
+  const leadScatterData = tradeRecords.map(t => ({
+    value: [t.date, t.lead], // Scatter 格式：[x, y]
+    symbol: t.type === 'BUY' ? 'arrow' : 'pin',
+    symbolSize: 18,
+    symbolRotate: t.type === 'BUY' ? 0 : 180,
+    itemStyle: { 
+      color: t.type === 'BUY' ? '#198754' : '#dc3545',
+      borderColor: '#fff', 
+      borderWidth: 2 
+    }
+  }));
+
+  const option = {
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
-    legend: { data: ['0050 月K線', '領先指標 (不含趨勢)'], top: 5 },
+    legend: { data: ['0050 月K線', '領先指標', '交易信號'], top: 10 },
     grid: [
-      { left: '8%', right: '5%', top: '8%', height: '55%' },
-      { left: '8%', right: '5%', top: '70%', height: '20%' }
+      { left: '8%', right: '5%', top: '10%', height: '50%' }, // K線區 (上半)
+      { left: '8%', right: '5%', top: '68%', height: '25%' }  // 指標區 (下半)
     ],
     xAxis: [
       { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },
       { type: 'category', data: dates, gridIndex: 1 }
     ],
     yAxis: [
-      { scale: true, gridIndex: 0, name: '股價 (元)' },
-      { scale: true, gridIndex: 1, name: '指標' }
+      { type: 'value', scale: true, gridIndex: 0, name: '股價 (元)' },
+      { type: 'value', scale: true, gridIndex: 1, name: '指標分數' }
     ],
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1], start: 0, end: 100 },
-      { show: true, xAxisIndex: [0, 1], top: '94%', height: 15 }
+      { show: true, xAxisIndex: [0, 1], top: '95%', height: 15 }
     ],
     series: [
+      // 1. 0050 K線圖
       {
         name: '0050 月K線',
         type: 'candlestick',
         xAxisIndex: 0,
         yAxisIndex: 0,
         data: kLineData,
-        itemStyle: { color: '#dc3545', color0: '#198754', borderColor: '#dc3545', borderColor0: '#198754' },
-        markPoint: { data: markPointData }
+        itemStyle: {
+          color: '#dc3545', // 收盤 > 開盤 (紅)
+          color0: '#198754', // 收盤 < 開盤 (綠)
+          borderColor: '#dc3545',
+          borderColor0: '#198754'
+        },
+        markPoint: {
+          data: klineMarks
+        }
       },
+      // 2. 領先指標 (基礎折線與所有點位)
       {
-        name: '領先指標 (不含趨勢)',
+        name: '領先指標',
         type: 'line',
         xAxisIndex: 1,
         yAxisIndex: 1,
         data: leadData,
         lineStyle: { color: '#0d6efd', width: 2 },
-        showSymbol: true, // 開啟每個資料點的顯示
+        showSymbol: true,
+        symbol: 'circle',
+        symbolSize: 6, // 顯示每一個資料點
+        itemStyle: { color: '#0d6efd' },
         markLine: {
           symbol: 'none',
-          data: [{ yAxis: 100, name: '100基準線', lineStyle: { color: '#dc3545', type: 'dashed' } }]
+          data: [{ yAxis: 100, name: '100 基準線', lineStyle: { color: '#dc3545', type: 'dashed' } }]
         },
         markArea: {
           itemStyle: { color: 'rgba(253, 126, 20, 0.2)' },
           data: holdingAreas
         }
+      },
+      // 3. 領先指標信號層 (強勢覆蓋在折線之上)
+      {
+        name: '交易信號',
+        type: 'scatter',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: leadScatterData,
+        zlevel: 10 // 確保箭頭圖層疊在最上面
       }
     ]
-  });
+  };
+
+  chartInstance.setOption(option, true);
 };
 </script>
 
 <style scoped>
-/* 若有需要可在此加入專屬樣式 */
+/* 表格滾動條美化 */
+.table-responsive::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+  background-color: #dee2e6;
+  border-radius: 4px;
+}
 </style>
