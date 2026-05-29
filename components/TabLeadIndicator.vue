@@ -78,14 +78,12 @@ const chartDataList = ref([]);
 const trades = ref([]);
 let chartInstance = null;
 
-// 使用 Nuxt 3 內建的 Supabase Client
 const supabase = useSupabaseClient();
 
 onMounted(async () => {
   try {
     isLoading.value = true;
     
-    // 從 Supabase 讀取資料表，並依照日期舊到新排序
     const { data, error } = await supabase
       .from('macro_lead_0050')
       .select('*')
@@ -94,21 +92,21 @@ onMounted(async () => {
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error('資料庫中目前無數據，請先上傳整合好的資料。');
 
-    let currentPosition = 1; // 預設持有
+    let currentPosition = 1; 
     const processedData = [];
     const tradeRecords = [];
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       
-      // 🔥 無敵容錯機制 1：先確保「收盤價」絕對是正常的數字
+      // 🔥 關鍵修復：強制剪掉 Supabase 帶來的 "T00:00:00Z" 尾巴，確保純淨的 YYYY-MM-DD
+      const cleanDate = String(row.date || '').substring(0, 10);
+      
       const closeRaw = row.close ?? row.Close ?? row.CLOSE;
       const closePrice = parseFloat(closeRaw);
       
-      // 如果這筆連收盤價都沒有，那就直接跳過，絕不讓它毒害 ECharts
       if (isNaN(closePrice)) continue;
 
-      // 🔥 無敵容錯機制 2：開/高/低如果缺失或為 NaN，全部強制用「收盤價」替代
       let openPrice = parseFloat(row.open ?? row.Open ?? row.OPEN);
       openPrice = isNaN(openPrice) ? closePrice : openPrice;
 
@@ -121,7 +119,6 @@ onMounted(async () => {
       const leadValue = parseFloat(row.lead ?? row.Lead);
       const scoreValue = parseInt(row.score ?? row.Score);
 
-      // 如果指標是 NaN，也設為 0 以防萬一
       const safeLead = isNaN(leadValue) ? 0 : leadValue;
       const safeScore = isNaN(scoreValue) ? 0 : scoreValue;
 
@@ -132,7 +129,6 @@ onMounted(async () => {
       const leadDiff = safeLead - prevLeadValue;
       let signal = null;
       
-      // 買賣邏輯
       if ((safeScore <= 22 && leadDiff > 0) || safeLead > 100) {
         signal = 1;
       } else if (safeLead < 100 && leadDiff < 0) {
@@ -143,19 +139,18 @@ onMounted(async () => {
         currentPosition = signal;
       }
 
-      // 紀錄買賣點
       if (i > 0) {
         const prevPosition = processedData[i - 1].position;
         if (currentPosition === 1 && prevPosition === 0) {
-          tradeRecords.push({ date: row.date, type: 'BUY', price: closePrice, lead: safeLead, score: safeScore });
+          tradeRecords.push({ date: cleanDate, type: 'BUY', price: closePrice, lead: safeLead, score: safeScore });
         } else if (currentPosition === 0 && prevPosition === 1) {
-          tradeRecords.push({ date: row.date, type: 'SELL', price: closePrice, lead: safeLead, score: safeScore });
+          tradeRecords.push({ date: cleanDate, type: 'SELL', price: closePrice, lead: safeLead, score: safeScore });
         }
       }
 
-      // 存入轉型後的極度乾淨資料
+      // 存入清理過日期的資料
       processedData.push({
-        date: row.date,
+        date: cleanDate,
         open: openPrice,
         close: closePrice,
         low: lowPrice,
@@ -199,7 +194,15 @@ const renderChart = (data, tradeRecords) => {
   chartInstance = echarts.init(dom);
 
   const dates = data.map(item => item.date);
-  const kLineData = data.map(item => [item.open, item.close, item.low, item.high]);
+  
+  // 確保給 ECharts 的 K 線資料是純數字陣列 [開, 收, 低, 高]
+  const kLineData = data.map(item => [
+    Number(item.open), 
+    Number(item.close), 
+    Number(item.low), 
+    Number(item.high)
+  ]);
+  
   const leadData = data.map(item => item.lead);
 
   const markPointData = tradeRecords.map(t => {
