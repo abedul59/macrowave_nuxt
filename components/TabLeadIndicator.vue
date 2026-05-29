@@ -78,19 +78,18 @@ const chartDataList = ref([]);
 const trades = ref([]);
 let chartInstance = null;
 
-// 假設您已經整合了 Supabase
+// 使用 Nuxt 3 內建的 Supabase Client (需確保專案已安裝 @nuxtjs/supabase)
 const supabase = useSupabaseClient();
 
 onMounted(async () => {
   try {
     isLoading.value = true;
     
-    // ⚠️ 請確保您的 Supabase 中有一張名為 macro_lead_0050 的資料表
-    // 欄位包含：date, open, high, low, close, score, lead
+    // 從 Supabase 讀取資料表，並依照日期舊到新排序
     const { data, error } = await supabase
       .from('macro_lead_0050')
       .select('*')
-      .order('date', { ascending: true }); // 由舊到新排，方便計算指標
+      .order('date', { ascending: true }); 
 
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error('資料庫中目前無數據，請先上傳整合好的資料。');
@@ -102,16 +101,28 @@ onMounted(async () => {
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
+      
+      // 🔥 關鍵修復：強制將 Supabase 傳來的「字串」轉換為純「數字 (Float)」
+      const openPrice = parseFloat(row.open);
+      const closePrice = parseFloat(row.close);
+      const lowPrice = parseFloat(row.low);
+      const highPrice = parseFloat(row.high);
+      const leadValue = parseFloat(row.lead);
+      const scoreValue = parseInt(row.score);
+
       const prevRow = i > 0 ? data[i - 1] : row;
-      const leadDiff = row.lead - prevRow.lead;
+      const prevLeadValue = i > 0 ? parseFloat(prevRow.lead) : leadValue;
+      
+      const leadDiff = leadValue - prevLeadValue;
       
       let signal = null;
+      
       // 買進條件
-      if ((row.score <= 22 && leadDiff > 0) || row.lead > 100) {
+      if ((scoreValue <= 22 && leadDiff > 0) || leadValue > 100) {
         signal = 1;
       } 
       // 賣出條件
-      else if (row.lead < 100 && leadDiff < 0) {
+      else if (leadValue < 100 && leadDiff < 0) {
         signal = 0;
       }
 
@@ -123,14 +134,21 @@ onMounted(async () => {
       if (i > 0) {
         const prevPosition = processedData[i - 1].position;
         if (currentPosition === 1 && prevPosition === 0) {
-          tradeRecords.push({ date: row.date, type: 'BUY', price: row.close, lead: row.lead, score: row.score });
+          tradeRecords.push({ date: row.date, type: 'BUY', price: closePrice, lead: leadValue, score: scoreValue });
         } else if (currentPosition === 0 && prevPosition === 1) {
-          tradeRecords.push({ date: row.date, type: 'SELL', price: row.close, lead: row.lead, score: row.score });
+          tradeRecords.push({ date: row.date, type: 'SELL', price: closePrice, lead: leadValue, score: scoreValue });
         }
       }
 
+      // 存入轉型後的乾淨資料
       processedData.push({
-        ...row,
+        date: row.date,
+        open: openPrice,
+        close: closePrice,
+        low: lowPrice,
+        high: highPrice,
+        lead: leadValue,
+        score: scoreValue,
         position: currentPosition
       });
     }
@@ -138,9 +156,11 @@ onMounted(async () => {
     chartDataList.value = processedData;
     trades.value = tradeRecords;
 
+    // 確保 DOM 渲染完畢後再畫圖
     await nextTick();
     renderChart(processedData, tradeRecords);
     
+    // 綁定視窗縮放事件
     window.addEventListener('resize', handleResize);
 
   } catch (err) {
@@ -197,7 +217,8 @@ const renderChart = (data, tradeRecords) => {
       startHoldDate = null;
     }
   }
-  // 如果到最後一天都還持有
+  
+  // 如果到最後一天都還持有，補上最後一筆區間
   if (startHoldDate !== null) {
     holdingAreas.push([{ xAxis: startHoldDate }, { xAxis: data[data.length - 1].date }]);
   }
@@ -250,7 +271,7 @@ const renderChart = (data, tradeRecords) => {
           data: [{ yAxis: 100, name: '100基準線', lineStyle: { color: '#dc3545', type: 'dashed' } }]
         },
         markArea: {
-          itemStyle: { color: 'rgba(253, 126, 20, 0.2)' }, // 對應 Python 腳本的 orange alpha 0.2
+          itemStyle: { color: 'rgba(253, 126, 20, 0.2)' }, // 對應橘色透明背景
           data: holdingAreas
         }
       }
@@ -258,3 +279,7 @@ const renderChart = (data, tradeRecords) => {
   });
 };
 </script>
+
+<style scoped>
+/* 若有需要可在此加入專屬樣式 */
+</style>
