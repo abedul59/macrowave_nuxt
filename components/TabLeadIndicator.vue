@@ -78,7 +78,7 @@ const chartDataList = ref([]);
 const trades = ref([]);
 let chartInstance = null;
 
-// 使用 Nuxt 3 內建的 Supabase Client (需確保專案已安裝 @nuxtjs/supabase)
+// 使用 Nuxt 3 內建的 Supabase Client
 const supabase = useSupabaseClient();
 
 onMounted(async () => {
@@ -94,7 +94,6 @@ onMounted(async () => {
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error('資料庫中目前無數據，請先上傳整合好的資料。');
 
-    // 1. 在前端重現 Python 策略邏輯
     let currentPosition = 1; // 預設持有
     const processedData = [];
     const tradeRecords = [];
@@ -102,27 +101,41 @@ onMounted(async () => {
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       
-      // 🔥 關鍵修復：強制將 Supabase 傳來的「字串」轉換為純「數字 (Float)」
-      const openPrice = parseFloat(row.open);
-      const closePrice = parseFloat(row.close);
-      const lowPrice = parseFloat(row.low);
-      const highPrice = parseFloat(row.high);
-      const leadValue = parseFloat(row.lead);
-      const scoreValue = parseInt(row.score);
+      // 🔥 無敵容錯機制 1：先確保「收盤價」絕對是正常的數字
+      const closeRaw = row.close ?? row.Close ?? row.CLOSE;
+      const closePrice = parseFloat(closeRaw);
+      
+      // 如果這筆連收盤價都沒有，那就直接跳過，絕不讓它毒害 ECharts
+      if (isNaN(closePrice)) continue;
+
+      // 🔥 無敵容錯機制 2：開/高/低如果缺失或為 NaN，全部強制用「收盤價」替代
+      let openPrice = parseFloat(row.open ?? row.Open ?? row.OPEN);
+      openPrice = isNaN(openPrice) ? closePrice : openPrice;
+
+      let lowPrice = parseFloat(row.low ?? row.Low ?? row.LOW);
+      lowPrice = isNaN(lowPrice) ? closePrice : lowPrice;
+
+      let highPrice = parseFloat(row.high ?? row.High ?? row.HIGH);
+      highPrice = isNaN(highPrice) ? closePrice : highPrice;
+
+      const leadValue = parseFloat(row.lead ?? row.Lead);
+      const scoreValue = parseInt(row.score ?? row.Score);
+
+      // 如果指標是 NaN，也設為 0 以防萬一
+      const safeLead = isNaN(leadValue) ? 0 : leadValue;
+      const safeScore = isNaN(scoreValue) ? 0 : scoreValue;
 
       const prevRow = i > 0 ? data[i - 1] : row;
-      const prevLeadValue = i > 0 ? parseFloat(prevRow.lead) : leadValue;
+      const prevLeadRaw = parseFloat(prevRow.lead ?? prevRow.Lead);
+      const prevLeadValue = i > 0 && !isNaN(prevLeadRaw) ? prevLeadRaw : safeLead;
       
-      const leadDiff = leadValue - prevLeadValue;
-      
+      const leadDiff = safeLead - prevLeadValue;
       let signal = null;
       
-      // 買進條件
-      if ((scoreValue <= 22 && leadDiff > 0) || leadValue > 100) {
+      // 買賣邏輯
+      if ((safeScore <= 22 && leadDiff > 0) || safeLead > 100) {
         signal = 1;
-      } 
-      // 賣出條件
-      else if (leadValue < 100 && leadDiff < 0) {
+      } else if (safeLead < 100 && leadDiff < 0) {
         signal = 0;
       }
 
@@ -134,21 +147,21 @@ onMounted(async () => {
       if (i > 0) {
         const prevPosition = processedData[i - 1].position;
         if (currentPosition === 1 && prevPosition === 0) {
-          tradeRecords.push({ date: row.date, type: 'BUY', price: closePrice, lead: leadValue, score: scoreValue });
+          tradeRecords.push({ date: row.date, type: 'BUY', price: closePrice, lead: safeLead, score: safeScore });
         } else if (currentPosition === 0 && prevPosition === 1) {
-          tradeRecords.push({ date: row.date, type: 'SELL', price: closePrice, lead: leadValue, score: scoreValue });
+          tradeRecords.push({ date: row.date, type: 'SELL', price: closePrice, lead: safeLead, score: safeScore });
         }
       }
 
-      // 存入轉型後的乾淨資料
+      // 存入轉型後的極度乾淨資料
       processedData.push({
         date: row.date,
         open: openPrice,
         close: closePrice,
         low: lowPrice,
         high: highPrice,
-        lead: leadValue,
-        score: scoreValue,
+        lead: safeLead,
+        score: safeScore,
         position: currentPosition
       });
     }
@@ -156,11 +169,9 @@ onMounted(async () => {
     chartDataList.value = processedData;
     trades.value = tradeRecords;
 
-    // 確保 DOM 渲染完畢後再畫圖
     await nextTick();
     renderChart(processedData, tradeRecords);
     
-    // 綁定視窗縮放事件
     window.addEventListener('resize', handleResize);
 
   } catch (err) {
@@ -188,11 +199,9 @@ const renderChart = (data, tradeRecords) => {
   chartInstance = echarts.init(dom);
 
   const dates = data.map(item => item.date);
-  // ECharts K線資料格式: [開, 收, 低, 高]
   const kLineData = data.map(item => [item.open, item.close, item.low, item.high]);
   const leadData = data.map(item => item.lead);
 
-  // 整理標記點 (買賣信號箭頭)
   const markPointData = tradeRecords.map(t => {
     return {
       name: t.type,
@@ -206,7 +215,6 @@ const renderChart = (data, tradeRecords) => {
     };
   });
 
-  // 整理背景色塊 (持有期間)
   const holdingAreas = [];
   let startHoldDate = null;
   for (let i = 0; i < data.length; i++) {
@@ -217,22 +225,17 @@ const renderChart = (data, tradeRecords) => {
       startHoldDate = null;
     }
   }
-  
-  // 如果到最後一天都還持有，補上最後一筆區間
   if (startHoldDate !== null) {
     holdingAreas.push([{ xAxis: startHoldDate }, { xAxis: data[data.length - 1].date }]);
   }
 
   chartInstance.setOption({
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross' }
-    },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     legend: { data: ['0050 月K線', '領先指標 (不含趨勢)'], top: 5 },
     grid: [
-      { left: '8%', right: '5%', top: '8%', height: '55%' },  // 上半部 K 線圖
-      { left: '8%', right: '5%', top: '70%', height: '20%' }  // 下半部領先指標圖
+      { left: '8%', right: '5%', top: '8%', height: '55%' },
+      { left: '8%', right: '5%', top: '70%', height: '20%' }
     ],
     xAxis: [
       { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },
@@ -254,9 +257,7 @@ const renderChart = (data, tradeRecords) => {
         yAxisIndex: 0,
         data: kLineData,
         itemStyle: { color: '#dc3545', color0: '#198754', borderColor: '#dc3545', borderColor0: '#198754' },
-        markPoint: {
-          data: markPointData
-        }
+        markPoint: { data: markPointData }
       },
       {
         name: '領先指標 (不含趨勢)',
@@ -271,7 +272,7 @@ const renderChart = (data, tradeRecords) => {
           data: [{ yAxis: 100, name: '100基準線', lineStyle: { color: '#dc3545', type: 'dashed' } }]
         },
         markArea: {
-          itemStyle: { color: 'rgba(253, 126, 20, 0.2)' }, // 對應橘色透明背景
+          itemStyle: { color: 'rgba(253, 126, 20, 0.2)' },
           data: holdingAreas
         }
       }
