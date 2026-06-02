@@ -99,6 +99,7 @@ const errorMsg = ref('');
 const chartDataList = ref([]); 
 const trades = ref([]); 
 let chartInstance = null;
+let resizeObserver = null; // 🔥 新增：元素尺寸監聽器
 
 const supabase = useSupabaseClient();
 
@@ -172,8 +173,14 @@ onMounted(async () => {
     chartDataList.value = processedData;
     trades.value = tradeRecords;
 
+    // 等待 Vue 將 DOM 完全渲染到畫面上
     await nextTick();
-    renderChart(processedData, tradeRecords);
+    
+    // 🔥 加上微小的延遲，確保 CSS Flex/Grid 已經把容器寬度撐開
+    setTimeout(() => {
+      renderChart(processedData, tradeRecords);
+    }, 100);
+
     window.addEventListener('resize', handleResize);
 
   } catch (err) {
@@ -186,6 +193,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
+  // 🔥 關閉時記得解除監聽，避免記憶體洩漏
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+  }
   if (chartInstance) chartInstance.dispose();
 });
 
@@ -200,17 +211,25 @@ const renderChart = (data, tradeRecords) => {
   if (chartInstance) chartInstance.dispose();
   chartInstance = echarts.init(dom);
 
+  // 🔥 終極保險：使用 ResizeObserver 緊迫盯人
+  // 只要那個 div 元素的寬度或高度一發生變化，立刻叫 ECharts 重繪
+  if (!resizeObserver) {
+    resizeObserver = new ResizeObserver(() => {
+      if (chartInstance) chartInstance.resize();
+    });
+    resizeObserver.observe(dom);
+  }
+
   const dates = [];
-  const priceData = []; // 🔥 變成單純的收盤價折線陣列
+  const priceData = []; 
   const leadData = [];
 
   data.forEach(item => {
     dates.push(item.date);
-    priceData.push(item.close); // 只塞入收盤價
+    priceData.push(item.close); 
     leadData.push(item.lead);
   });
 
-  // 股價圖層的買賣箭頭
   const priceMarks = tradeRecords.map(t => ({
     xAxis: t.date,
     yAxis: t.price,
@@ -223,7 +242,6 @@ const renderChart = (data, tradeRecords) => {
     label: { show: false }
   }));
 
-  // 指標圖層的買賣箭頭
   const leadMarks = tradeRecords.map(t => ({
     xAxis: t.date,
     yAxis: t.lead,
@@ -271,21 +289,19 @@ const renderChart = (data, tradeRecords) => {
       { show: true, xAxisIndex: [0, 1], top: '95%', height: 15 }
     ],
     series: [
-      // 🔥 將 K 線圖 (candlestick) 改為純折線圖 (line)
       {
         name: '0050 月收盤走勢',
         type: 'line',
         xAxisIndex: 0,
         yAxisIndex: 0,
         data: priceData,
-        lineStyle: { color: '#212529', width: 2 }, // 深灰色股價線
-        showSymbol: false, // 隱藏小圓點，讓線條更乾淨
+        lineStyle: { color: '#212529', width: 2 }, 
+        showSymbol: false, 
         itemStyle: { color: '#212529' },
         markPoint: {
           data: priceMarks
         }
       },
-      // 領先指標折線圖維持不變
       {
         name: '領先指標',
         type: 'line',
@@ -313,5 +329,8 @@ const renderChart = (data, tradeRecords) => {
   };
 
   chartInstance.setOption(option, true);
+  
+  // 🔥 強制再次校準：確保第一次畫上去後，馬上依照最終寬度重繪
+  chartInstance.resize();
 };
 </script>
