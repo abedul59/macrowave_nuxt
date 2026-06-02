@@ -96,8 +96,8 @@ import * as echarts from 'echarts';
 
 const isLoading = ref(true);
 const errorMsg = ref('');
-const chartDataList = ref([]); // 存放所有月份資料
-const trades = ref([]); // 僅存放交易點，給圖表畫箭頭用
+const chartDataList = ref([]); 
+const trades = ref([]); 
 let chartInstance = null;
 
 const supabase = useSupabaseClient();
@@ -122,22 +122,12 @@ onMounted(async () => {
       const c = Number(item.close);
       if (isNaN(c)) return; 
 
-      let o = Number(item.open); if (isNaN(o)) o = c;
-      let h = Number(item.high); if (isNaN(h)) h = c;
-      let l = Number(item.low);  if (isNaN(l)) l = c;
-
-      const realHigh = Math.max(o, c, h, l);
-      const realLow = Math.min(o, c, h, l);
-
       let lead = Number(item.lead); if (isNaN(lead)) lead = 0;
       let score = Number(item.score); if (isNaN(score)) score = 0;
 
       cleanData.push({
         date: d,
-        open: o,
         close: c,
-        low: realLow,
-        high: realHigh,
         lead: lead,
         score: score
       });
@@ -163,7 +153,6 @@ onMounted(async () => {
         currentPosition = signal;
       }
 
-      // 判斷當月是否有發生動作
       let currentAction = null;
 
       if (i > 0) {
@@ -177,7 +166,6 @@ onMounted(async () => {
         }
       }
 
-      // 🔥 關鍵修改：將 action 存入 processedData 供表格使用
       processedData.push({ ...row, position: currentPosition, action: currentAction });
     }
 
@@ -213,27 +201,29 @@ const renderChart = (data, tradeRecords) => {
   chartInstance = echarts.init(dom);
 
   const dates = [];
-  const kLineData = [];
+  const priceData = []; // 🔥 變成單純的收盤價折線陣列
   const leadData = [];
 
   data.forEach(item => {
     dates.push(item.date);
-    kLineData.push([item.open, item.close, item.low, item.high]);
+    priceData.push(item.close); // 只塞入收盤價
     leadData.push(item.lead);
   });
 
-  const klineMarks = tradeRecords.map(t => ({
+  // 股價圖層的買賣箭頭
+  const priceMarks = tradeRecords.map(t => ({
     xAxis: t.date,
     yAxis: t.price,
     value: t.type,
     symbol: t.type === 'BUY' ? 'arrow' : 'pin',
     symbolSize: 16,
     symbolRotate: t.type === 'BUY' ? 0 : 180,
-    symbolOffset: [0, t.type === 'BUY' ? 12 : -12],
+    symbolOffset: [0, t.type === 'BUY' ? 15 : -15],
     itemStyle: { color: t.type === 'BUY' ? '#198754' : '#dc3545' },
     label: { show: false }
   }));
 
+  // 指標圖層的買賣箭頭
   const leadMarks = tradeRecords.map(t => ({
     xAxis: t.date,
     yAxis: t.lead,
@@ -241,7 +231,7 @@ const renderChart = (data, tradeRecords) => {
     symbol: t.type === 'BUY' ? 'arrow' : 'pin',
     symbolSize: 16,
     symbolRotate: t.type === 'BUY' ? 0 : 180,
-    symbolOffset: [0, t.type === 'BUY' ? 12 : -12],
+    symbolOffset: [0, t.type === 'BUY' ? 15 : -15],
     itemStyle: { color: t.type === 'BUY' ? '#198754' : '#dc3545' },
     label: { show: false }
   }));
@@ -263,7 +253,7 @@ const renderChart = (data, tradeRecords) => {
   const option = {
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
-    legend: { data: ['0050 月K線', '領先指標'], top: 10 },
+    legend: { data: ['0050 月收盤走勢', '領先指標'], top: 10 },
     grid: [
       { left: '8%', right: '5%', top: '10%', height: '50%' }, 
       { left: '8%', right: '5%', top: '68%', height: '25%' }  
@@ -281,22 +271,21 @@ const renderChart = (data, tradeRecords) => {
       { show: true, xAxisIndex: [0, 1], top: '95%', height: 15 }
     ],
     series: [
+      // 🔥 將 K 線圖 (candlestick) 改為純折線圖 (line)
       {
-        name: '0050 月K線',
-        type: 'candlestick',
+        name: '0050 月收盤走勢',
+        type: 'line',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: kLineData,
-        itemStyle: {
-          color: '#dc3545', 
-          color0: '#198754', 
-          borderColor: '#dc3545',
-          borderColor0: '#198754'
-        },
+        data: priceData,
+        lineStyle: { color: '#212529', width: 2 }, // 深灰色股價線
+        showSymbol: false, // 隱藏小圓點，讓線條更乾淨
+        itemStyle: { color: '#212529' },
         markPoint: {
-          data: klineMarks
+          data: priceMarks
         }
       },
+      // 領先指標折線圖維持不變
       {
         name: '領先指標',
         type: 'line',
