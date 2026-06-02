@@ -10,7 +10,7 @@
                 自動化量化策略：景氣分數 ≤ 22 且回升 (或指標 > 100) 買進；指標 < 100 且下滑賣出。
               </p>
             </div>
-            <div class="text-end" v-if="!isLoading && trades.length > 0">
+            <div class="text-end" v-if="!isLoading && chartDataList.length > 0">
               <span class="badge bg-secondary fs-6 me-2">回測筆數：{{ chartDataList.length }} 個月</span>
               <span class="badge bg-primary fs-6">觸發交易：{{ trades.length }} 次</span>
             </div>
@@ -44,34 +44,39 @@
 
       <div class="col-lg-12">
         <div class="card shadow-sm border-0">
-          <div class="card-header bg-white fw-bold py-3">
-            <span class="text-dark">📜 歷史交易信號明細 (由新到舊)</span>
+          <div class="card-header bg-white fw-bold py-3 d-flex justify-content-between align-items-center">
+            <span class="text-dark">📜 歷史所有數據明細 (由新到舊)</span>
+            <span class="badge bg-light text-dark border">展開所有月份數據</span>
           </div>
           <div class="card-body p-0">
-            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
               <table class="table table-hover table-striped mb-0 text-center align-middle">
                 <thead class="table-dark sticky-top">
                   <tr>
                     <th>交易年月</th>
                     <th>信號動作</th>
-                    <th>觸發價格 (0050)</th>
+                    <th>收盤價 (0050)</th>
                     <th>領先指標</th>
                     <th>景氣分數</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(t, index) in trades.slice().reverse()" :key="index">
-                    <td class="fw-bold">{{ t.date }}</td>
+                  <tr v-for="(item, index) in chartDataList.slice().reverse()" :key="index">
+                    <td class="fw-bold">{{ item.date }}</td>
+                    
                     <td>
-                      <span :class="t.type === 'BUY' ? 'badge bg-success fs-6' : 'badge bg-danger fs-6'">
-                        {{ t.type === 'BUY' ? '買進 (BUY)' : '賣出 (SELL)' }}
-                      </span>
+                      <span v-if="item.action === 'BUY'" class="badge bg-success fs-6">買進 (BUY)</span>
+                      <span v-else-if="item.action === 'SELL'" class="badge bg-danger fs-6">賣出 (SELL)</span>
+                      <span v-else class="text-muted">-</span>
                     </td>
-                    <td class="fw-bold text-primary">{{ t.price.toFixed(2) }}</td>
-                    <td>{{ t.lead.toFixed(2) }}</td>
+                    
+                    <td :class="{'fw-bold text-primary': item.action, 'text-dark': !item.action}">
+                      {{ item.close.toFixed(2) }}
+                    </td>
+                    <td :class="{'fw-bold': item.action}">{{ item.lead.toFixed(2) }}</td>
                     <td>
-                      <span :class="t.score <= 22 ? 'text-primary fw-bold' : 'text-dark'">
-                        {{ t.score }}
+                      <span :class="item.score <= 22 ? 'text-primary fw-bold' : 'text-dark'">
+                        {{ item.score }}
                       </span>
                     </td>
                   </tr>
@@ -91,8 +96,8 @@ import * as echarts from 'echarts';
 
 const isLoading = ref(true);
 const errorMsg = ref('');
-const chartDataList = ref([]);
-const trades = ref([]);
+const chartDataList = ref([]); // 存放所有月份資料
+const trades = ref([]); // 僅存放交易點，給圖表畫箭頭用
 let chartInstance = null;
 
 const supabase = useSupabaseClient();
@@ -111,7 +116,6 @@ onMounted(async () => {
 
     const cleanData = [];
     data.forEach(item => {
-      // 確保拿到的是純字串日期
       const d = item.date ? String(item.date).split('T')[0] : '';
       if (!d) return;
 
@@ -159,16 +163,22 @@ onMounted(async () => {
         currentPosition = signal;
       }
 
+      // 判斷當月是否有發生動作
+      let currentAction = null;
+
       if (i > 0) {
         const prevPosition = processedData[i - 1].position;
         if (currentPosition === 1 && prevPosition === 0) {
+          currentAction = 'BUY';
           tradeRecords.push({ date: row.date, type: 'BUY', price: row.close, lead: row.lead, score: row.score });
         } else if (currentPosition === 0 && prevPosition === 1) {
+          currentAction = 'SELL';
           tradeRecords.push({ date: row.date, type: 'SELL', price: row.close, lead: row.lead, score: row.score });
         }
       }
 
-      processedData.push({ ...row, position: currentPosition });
+      // 🔥 關鍵修改：將 action 存入 processedData 供表格使用
+      processedData.push({ ...row, position: currentPosition, action: currentAction });
     }
 
     chartDataList.value = processedData;
@@ -208,12 +218,10 @@ const renderChart = (data, tradeRecords) => {
 
   data.forEach(item => {
     dates.push(item.date);
-    // ECharts Candlestick 嚴格要求 [開, 收, 低, 高] 格式
     kLineData.push([item.open, item.close, item.low, item.high]);
     leadData.push(item.lead);
   });
 
-  // 🔥 修正 1：K 線圖箭頭，改用精準的 xAxis 屬性直接綁定日期字串
   const klineMarks = tradeRecords.map(t => ({
     xAxis: t.date,
     yAxis: t.price,
@@ -226,7 +234,6 @@ const renderChart = (data, tradeRecords) => {
     label: { show: false }
   }));
 
-  // 🔥 修正 2：指標圖箭頭，直接綁定在 Line 系列上，拋棄 Scatter
   const leadMarks = tradeRecords.map(t => ({
     xAxis: t.date,
     yAxis: t.lead,
@@ -239,7 +246,6 @@ const renderChart = (data, tradeRecords) => {
     label: { show: false }
   }));
 
-  // 🔥 修正 3：背景區塊同樣使用精準的 xAxis 綁定
   const holdingAreas = [];
   let startHoldDate = null;
   for (let i = 0; i < data.length; i++) {
@@ -298,12 +304,12 @@ const renderChart = (data, tradeRecords) => {
         yAxisIndex: 1,
         data: leadData,
         lineStyle: { color: '#0d6efd', width: 2 },
-        showSymbol: true, // 顯示所有藍色小圓點
+        showSymbol: true,
         symbol: 'circle',
         symbolSize: 5,
         itemStyle: { color: '#0d6efd' },
         markPoint: {
-          data: leadMarks // 買賣時直接在該點位疊加上醒目的紅綠大箭頭！
+          data: leadMarks 
         },
         markLine: {
           symbol: 'none',
@@ -320,15 +326,3 @@ const renderChart = (data, tradeRecords) => {
   chartInstance.setOption(option, true);
 };
 </script>
-
-<style scoped>
-/* 表格滾動條美化 */
-.table-responsive::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.table-responsive::-webkit-scrollbar-thumb {
-  background-color: #dee2e6;
-  border-radius: 4px;
-}
-</style>
