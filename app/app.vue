@@ -42,6 +42,12 @@
             🔥 領先指標 (0050)
           </button>
         </li>
+        <!-- 新增美股 K 線圖分頁按鈕 -->
+        <li class="nav-item">
+          <button :class="['nav-link py-3 text-warning text-darken', { active: activeTab === 'usstock' }]" @click="activeTab = 'usstock'">
+            🇺🇸 美股 K 線查詢
+          </button>
+        </li>
       </ul>
     </div>
 
@@ -57,7 +63,7 @@
 import { ref, computed } from 'vue'
 import { useHead } from '#imports'
 
-// 強制手動匯入六個分頁檔案
+// 強制手動匯入七個分頁檔案 (包含新的美股元件)
 import TabDashboard from '../components/TabDashboard.vue'
 import TabTaiexTraditional from '../components/TabTaiexTraditional.vue'
 import TabTaiexDynamic from '../components/TabTaiexDynamic.vue'
@@ -65,6 +71,7 @@ import TabTaiexHistory from '../components/TabTaiexHistory.vue'
 import TabTaiexHistoryMonthly from '../components/TabTaiexHistoryMonthly.vue'
 import TabTmfRetailRatio from '../components/TabTmfRetailRatio.vue'
 import TabLeadIndicator from '../components/TabLeadIndicator.vue'
+import StockChart from '../components/StockChart.vue'
 
 // 全局引入 ECharts 套件
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
@@ -82,6 +89,7 @@ const currentTabComponent = computed(() => {
     case 'historyMonthly': return TabTaiexHistoryMonthly
     case 'tmf': return TabTmfRetailRatio
     case 'lead': return TabLeadIndicator
+    case 'usstock': return StockChart // 處理新的切換邏輯
     default: return TabDashboard
   }
 })
@@ -97,4 +105,6 @@ body { background-color: #f4f6f9; font-family: "Segoe UI", Roboto, sans-serif; c
 .advice-badge { padding: 8px 16px; border-radius: 20px; font-weight: bold; font-size: 1.1rem; }
 .status-Safe { color: #198754; font-weight: bold; }
 .status-Danger { color: #dc3545; font-weight: bold; }
+/* 微調美股標籤顏色使其更醒目 */
+.text-darken { filter: brightness(0.85); font-weight: 700; }
 </style>
