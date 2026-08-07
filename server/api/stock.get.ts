@@ -1,4 +1,8 @@
-import yahooFinance from 'yahoo-finance2';
+// 🔥 關鍵修正 1：改用解構賦值的方式引入類別
+import { YahooFinance } from 'yahoo-finance2';
+
+// 🔥 關鍵修正 2：手動建立一個實例 (Instance)
+const yahooFinance = new YahooFinance();
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -12,7 +16,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // Calculate start date based on range
+  // 計算時間區間
   const now = new Date();
   let startDate = new Date();
   
@@ -35,11 +39,11 @@ export default defineEventHandler(async (event) => {
       interval: '1d' as const,
     };
     
+    // 使用剛才建立的實例來呼叫 historical 函數
     const result = await yahooFinance.historical(ticker, queryOptions);
     
-    // Format data for lightweight-charts
+    // 將資料格式化為 lightweight-charts 規定的結構
     const formattedData = result.map((item) => {
-      // Lightweight charts requires dates in YYYY-MM-DD format (string)
       const dateString = item.date.toISOString().split('T')[0];
       return {
         time: dateString,
