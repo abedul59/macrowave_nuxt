@@ -17,6 +17,7 @@
     "vue": "^3.5.28",
     "vue-router": "^4.6.4",
     "yahoo-finance2": "^3.13.0",
-    "echarts": "^6.0.0"
+    "echarts": "^6.0.0",
+    "lightweight-charts"
   }
 }
