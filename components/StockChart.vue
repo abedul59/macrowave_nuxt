@@ -50,7 +50,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, shallowRef, watch } from 'vue';
+import { ref, onMounted, onUnmounted, shallowRef, nextTick } from 'vue';
 import { createChart } from 'lightweight-charts';
 
 const ticker = ref('AAPL');
@@ -69,18 +69,22 @@ const stats = ref(null);
 const chartContainer = ref(null);
 const chart = shallowRef(null);
 const candlestickSeries = shallowRef(null);
-const volumeSeries = shallowRef(null);
 
 const setRange = (newRange) => {
   range.value = newRange;
   fetchData();
 };
 
-const initChart = () => {
-  if (!chartContainer.value) return;
+// 🔥 強化 1：加入 async / await nextTick，強迫等待容器渲染完畢
+const initChart = async () => {
+  await nextTick(); 
   
+  if (!chartContainer.value) return;
+  if (chart.value) return; // 如果已經初始化過，就不要重複建立
+
   chart.value = createChart(chartContainer.value, {
-    width: chartContainer.value.clientWidth,
+    // 給予預設寬度防呆，避免隱藏分頁時寬度為 0 導致崩潰
+    width: chartContainer.value.clientWidth || 800, 
     height: 500,
     layout: {
       background: { type: 'solid', color: '#1E222D' },
@@ -90,16 +94,9 @@ const initChart = () => {
       vertLines: { color: '#2B2B43' },
       horzLines: { color: '#2B2B43' },
     },
-    crosshair: {
-      mode: 0,
-    },
-    rightPriceScale: {
-      borderColor: '#2B2B43',
-    },
-    timeScale: {
-      borderColor: '#2B2B43',
-      timeVisible: true,
-    },
+    crosshair: { mode: 0 },
+    rightPriceScale: { borderColor: '#2B2B43' },
+    timeScale: { borderColor: '#2B2B43', timeVisible: true },
   });
 
   candlestickSeries.value = chart.value.addCandlestickSeries({
@@ -111,11 +108,13 @@ const initChart = () => {
     wickUpColor: '#26a69a',
   });
 
-  // Responsive chart resize
   const resizeObserver = new ResizeObserver(entries => {
-    if (entries.length === 0 || entries[0].target !== chartContainer.value) { return; }
+    if (entries.length === 0 || entries[0].target !== chartContainer.value) return;
     const newRect = entries[0].contentRect;
-    chart.value.applyOptions({ width: newRect.width, height: newRect.height });
+    // 確保容器有尺寸才重繪，避免分頁切換時報錯
+    if (newRect.width > 0 && newRect.height > 0 && chart.value) {
+      chart.value.applyOptions({ width: newRect.width, height: newRect.height });
+    }
   });
 
   resizeObserver.observe(chartContainer.value);
@@ -124,6 +123,8 @@ const initChart = () => {
     resizeObserver.disconnect();
     if (chart.value) {
       chart.value.remove();
+      chart.value = null;
+      candlestickSeries.value = null;
     }
   });
 };
@@ -137,8 +138,6 @@ const calculateStats = (data) => {
   for (let i = 1; i < data.length; i++) {
     const prevClose = data[i - 1].close;
     const currentClose = data[i].close;
-    
-    // Calculate percentage change based on previous close
     const changePercent = ((currentClose - prevClose) / prevClose) * 100;
 
     if (changePercent > maxRise) {
@@ -167,24 +166,28 @@ const fetchData = async () => {
     const response = await fetch(`/api/stock?ticker=${ticker.value.toUpperCase()}&range=${range.value}`);
     if (!response.ok) {
       const errData = await response.json();
-      throw new Error(errData.statusMessage || '取得資料失敗');
+      throw new Error(errData.statusMessage || errData.message || '取得資料失敗');
     }
     
     const data = await response.json();
     
-    if (data.length === 0) {
-      throw new Error('找不到該股票資料');
-    }
+    if (data.error) throw new Error(data.message);
+    if (!data || data.length === 0) throw new Error('找不到該股票資料');
 
-    // Update chart
-    if (!chart.value) {
-      initChart();
+    // 🔥 強化 2：在塞入資料前，強制確認圖表與資料列都已準備好
+    await nextTick();
+    if (!chart.value || !candlestickSeries.value) {
+      await initChart();
     }
     
-    candlestickSeries.value.setData(data);
-    chart.value.timeScale().fitContent();
-
-    calculateStats(data);
+    // 🔥 強化 3：最後防呆，真的有這個實例才執行 setData
+    if (candlestickSeries.value) {
+      candlestickSeries.value.setData(data);
+      chart.value.timeScale().fitContent();
+      calculateStats(data);
+    } else {
+      throw new Error('圖表容器初始化失敗，請重新載入網頁');
+    }
     
   } catch (err) {
     error.value = err.message;
@@ -196,7 +199,6 @@ const fetchData = async () => {
 
 onMounted(() => {
   initChart();
-  // fetchData(); // Optional: Fetch initial data on load
 });
 </script>
 
