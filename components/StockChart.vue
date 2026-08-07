@@ -44,14 +44,16 @@
     </div>
 
     <div class="chart-wrapper">
-      <div ref="chartContainer" class="chart-container"></div>
+      <!-- 統一 ECharts 的容器 -->
+      <div id="us-stock-chart" ref="chartContainer" class="chart-container"></div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, shallowRef } from 'vue';
-import { createChart } from 'lightweight-charts';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+// 🔥 統一改用 ECharts
+import * as echarts from 'echarts';
 
 const ticker = ref('AAPL');
 const range = ref('1y');
@@ -67,55 +69,12 @@ const error = ref('');
 const stats = ref(null);
 
 const chartContainer = ref(null);
-const chart = shallowRef(null);
-const candlestickSeries = shallowRef(null);
+let chartInstance = null;
 let resizeObserver = null;
 
 const setRange = (newRange) => {
   range.value = newRange;
   fetchData();
-};
-
-// 🔥 關鍵修正：移除 async/await 的干擾，使用純同步初始化
-const initChart = () => {
-  if (!chartContainer.value) return false;
-  if (chart.value) return true; // 已初始化則跳過
-
-  chart.value = createChart(chartContainer.value, {
-    width: chartContainer.value.clientWidth || 800, 
-    height: 500,
-    layout: {
-      background: { type: 'solid', color: '#1E222D' },
-      textColor: '#D9D9D9',
-    },
-    grid: {
-      vertLines: { color: '#2B2B43' },
-      horzLines: { color: '#2B2B43' },
-    },
-    crosshair: { mode: 0 },
-    rightPriceScale: { borderColor: '#2B2B43' },
-    timeScale: { borderColor: '#2B2B43', timeVisible: true },
-  });
-
-  candlestickSeries.value = chart.value.addCandlestickSeries({
-    upColor: '#26a69a',
-    downColor: '#ef5350',
-    borderDownColor: '#ef5350',
-    borderUpColor: '#26a69a',
-    wickDownColor: '#ef5350',
-    wickUpColor: '#26a69a',
-  });
-
-  resizeObserver = new ResizeObserver(entries => {
-    if (entries.length === 0 || entries[0].target !== chartContainer.value) return;
-    const newRect = entries[0].contentRect;
-    if (newRect.width > 0 && newRect.height > 0 && chart.value) {
-      chart.value.applyOptions({ width: newRect.width, height: newRect.height });
-    }
-  });
-
-  resizeObserver.observe(chartContainer.value);
-  return true;
 };
 
 const calculateStats = (data) => {
@@ -142,6 +101,84 @@ const calculateStats = (data) => {
   stats.value = { maxRise, maxFall, maxRiseDate, maxFallDate };
 };
 
+// 🔥 使用 ECharts 的渲染引擎
+const renderChart = (data) => {
+  const dom = chartContainer.value;
+  if (!dom) return;
+
+  if (chartInstance) {
+    chartInstance.dispose();
+  }
+  chartInstance = echarts.init(dom);
+
+  // ECharts K 線圖要求的資料格式: [開盤, 收盤, 最低, 最高]
+  const dates = [];
+  const kLineValues = [];
+
+  data.forEach(item => {
+    dates.push(item.time);
+    // 確保順序正確：open, close, low, high
+    kLineValues.push([item.open, item.close, item.low, item.high]);
+  });
+
+  const option = {
+    backgroundColor: 'transparent', // 讓背景吃 CSS 的顏色
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' }
+    },
+    grid: {
+      left: '5%',
+      right: '5%',
+      bottom: '15%', // 留空間給底部的縮放條
+      top: '5%'
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      scale: true,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: '#434651' } },
+      axisLabel: { color: '#8c8f98' },
+      splitLine: { show: false }
+    },
+    yAxis: {
+      scale: true,
+      position: 'right', // 美股習慣把價格放右邊
+      axisLine: { lineStyle: { color: '#434651' } },
+      axisLabel: { color: '#8c8f98' },
+      splitLine: { lineStyle: { color: '#2B2B43' } }
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { show: true, type: 'slider', top: '90%', bottom: '2%', borderColor: '#2B2B43', textStyle: { color: '#8c8f98' } }
+    ],
+    series: [
+      {
+        name: '美股 K 線',
+        type: 'candlestick',
+        data: kLineValues,
+        itemStyle: {
+          color: '#26a69a',       // 漲: 實心綠
+          color0: '#ef5350',      // 跌: 實心紅
+          borderColor: '#26a69a', // 漲邊框
+          borderColor0: '#ef5350' // 跌邊框
+        }
+      }
+    ]
+  };
+
+  chartInstance.setOption(option);
+
+  // 加入 RWD 自動縮放監聽
+  if (!resizeObserver) {
+    resizeObserver = new ResizeObserver(() => {
+      if (chartInstance) chartInstance.resize();
+    });
+    resizeObserver.observe(dom);
+  }
+};
+
 const fetchData = async () => {
   if (!ticker.value) {
     error.value = '請輸入股票代號';
@@ -164,16 +201,10 @@ const fetchData = async () => {
     if (data.error) throw new Error(data.message);
     if (!data || data.length === 0) throw new Error('找不到該股票資料');
 
-    // 🔥 關鍵修正：呼叫同步初始化函數，確保執行成功才畫圖
-    const isReady = initChart();
-    
-    if (isReady && candlestickSeries.value) {
-      candlestickSeries.value.setData(data);
-      chart.value.timeScale().fitContent();
-      calculateStats(data);
-    } else {
-      throw new Error('圖表容器初始化失敗，請重新載入網頁');
-    }
+    // 確保 DOM 已更新才畫圖
+    await nextTick();
+    renderChart(data);
+    calculateStats(data);
     
   } catch (err) {
     error.value = err.message;
@@ -184,18 +215,15 @@ const fetchData = async () => {
 };
 
 onMounted(() => {
-  // 元件掛載時，嘗試延遲一點點初始化圖表框線，確保 DOM 寬高已計算完成
-  setTimeout(() => {
-    initChart();
-  }, 50);
+  // 元件初次掛載時可以選擇預設載入 AAPL
+  // fetchData();
 });
 
 onUnmounted(() => {
   if (resizeObserver) resizeObserver.disconnect();
-  if (chart.value) {
-    chart.value.remove();
-    chart.value = null;
-    candlestickSeries.value = null;
+  if (chartInstance) {
+    chartInstance.dispose();
+    chartInstance = null;
   }
 });
 </script>
@@ -208,7 +236,6 @@ onUnmounted(() => {
   border-radius: 12px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -376,6 +403,7 @@ onUnmounted(() => {
   border: 1px solid #2b2b43;
   border-radius: 8px;
   overflow: hidden;
+  background-color: #1E222D;
 }
 
 .chart-container {
