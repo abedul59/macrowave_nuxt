@@ -50,7 +50,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, shallowRef, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, shallowRef } from 'vue';
 import { createChart } from 'lightweight-charts';
 
 const ticker = ref('AAPL');
@@ -69,21 +69,19 @@ const stats = ref(null);
 const chartContainer = ref(null);
 const chart = shallowRef(null);
 const candlestickSeries = shallowRef(null);
+let resizeObserver = null;
 
 const setRange = (newRange) => {
   range.value = newRange;
   fetchData();
 };
 
-// 🔥 強化 1：加入 async / await nextTick，強迫等待容器渲染完畢
-const initChart = async () => {
-  await nextTick(); 
-  
-  if (!chartContainer.value) return;
-  if (chart.value) return; // 如果已經初始化過，就不要重複建立
+// 🔥 關鍵修正：移除 async/await 的干擾，使用純同步初始化
+const initChart = () => {
+  if (!chartContainer.value) return false;
+  if (chart.value) return true; // 已初始化則跳過
 
   chart.value = createChart(chartContainer.value, {
-    // 給予預設寬度防呆，避免隱藏分頁時寬度為 0 導致崩潰
     width: chartContainer.value.clientWidth || 800, 
     height: 500,
     layout: {
@@ -108,25 +106,16 @@ const initChart = async () => {
     wickUpColor: '#26a69a',
   });
 
-  const resizeObserver = new ResizeObserver(entries => {
+  resizeObserver = new ResizeObserver(entries => {
     if (entries.length === 0 || entries[0].target !== chartContainer.value) return;
     const newRect = entries[0].contentRect;
-    // 確保容器有尺寸才重繪，避免分頁切換時報錯
     if (newRect.width > 0 && newRect.height > 0 && chart.value) {
       chart.value.applyOptions({ width: newRect.width, height: newRect.height });
     }
   });
 
   resizeObserver.observe(chartContainer.value);
-
-  onUnmounted(() => {
-    resizeObserver.disconnect();
-    if (chart.value) {
-      chart.value.remove();
-      chart.value = null;
-      candlestickSeries.value = null;
-    }
-  });
+  return true;
 };
 
 const calculateStats = (data) => {
@@ -164,6 +153,7 @@ const fetchData = async () => {
   
   try {
     const response = await fetch(`/api/stock?ticker=${ticker.value.toUpperCase()}&range=${range.value}`);
+    
     if (!response.ok) {
       const errData = await response.json();
       throw new Error(errData.statusMessage || errData.message || '取得資料失敗');
@@ -174,14 +164,10 @@ const fetchData = async () => {
     if (data.error) throw new Error(data.message);
     if (!data || data.length === 0) throw new Error('找不到該股票資料');
 
-    // 🔥 強化 2：在塞入資料前，強制確認圖表與資料列都已準備好
-    await nextTick();
-    if (!chart.value || !candlestickSeries.value) {
-      await initChart();
-    }
+    // 🔥 關鍵修正：呼叫同步初始化函數，確保執行成功才畫圖
+    const isReady = initChart();
     
-    // 🔥 強化 3：最後防呆，真的有這個實例才執行 setData
-    if (candlestickSeries.value) {
+    if (isReady && candlestickSeries.value) {
       candlestickSeries.value.setData(data);
       chart.value.timeScale().fitContent();
       calculateStats(data);
@@ -198,7 +184,19 @@ const fetchData = async () => {
 };
 
 onMounted(() => {
-  initChart();
+  // 元件掛載時，嘗試延遲一點點初始化圖表框線，確保 DOM 寬高已計算完成
+  setTimeout(() => {
+    initChart();
+  }, 50);
+});
+
+onUnmounted(() => {
+  if (resizeObserver) resizeObserver.disconnect();
+  if (chart.value) {
+    chart.value.remove();
+    chart.value = null;
+    candlestickSeries.value = null;
+  }
 });
 </script>
 
