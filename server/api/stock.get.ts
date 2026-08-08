@@ -27,16 +27,14 @@ export default defineEventHandler(async (event) => {
       interval: '1d' as const,
     };
     
-    // 🔥 關鍵修正 1：改用 Yahoo 官方建議的 .chart() 方法
     const result = await yahooFinance.chart(ticker, queryOptions);
     
-    // 🔥 關鍵修正 2：資料現在存放在 result.quotes 陣列中
     if (!result.quotes || result.quotes.length === 0) {
         return [];
     }
 
     const formattedData = result.quotes
-      .filter(item => item.close !== null) // 過濾掉可能的空資料
+      .filter(item => item.close !== null)
       .map((item) => {
         const dateString = item.date.toISOString().split('T')[0];
         return {
@@ -45,6 +43,7 @@ export default defineEventHandler(async (event) => {
           high: item.high,
           low: item.low,
           close: item.close,
+          adjclose: item.adjclose // 🔥 新增：抓取還權收盤價
         };
       });
 
