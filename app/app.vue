@@ -42,10 +42,14 @@
             🔥 領先指標 (0050)
           </button>
         </li>
-        <!-- 新增美股 K 線圖分頁按鈕 -->
         <li class="nav-item">
           <button :class="['nav-link py-3 text-warning text-darken', { active: activeTab === 'usstock' }]" @click="activeTab = 'usstock'">
             🇺🇸 美股 K 線查詢
+          </button>
+        </li>
+        <li class="nav-item">
+          <button :class="['nav-link py-3 text-info text-darken', { active: activeTab === 'options' }]" @click="activeTab = 'options'">
+            🇺🇸 選擇權籌碼
           </button>
         </li>
       </ul>
@@ -63,7 +67,7 @@
 import { ref, computed } from 'vue'
 import { useHead } from '#imports'
 
-// 強制手動匯入七個分頁檔案 (包含新的美股元件)
+// 強制手動匯入所有分頁檔案
 import TabDashboard from '../components/TabDashboard.vue'
 import TabTaiexTraditional from '../components/TabTaiexTraditional.vue'
 import TabTaiexDynamic from '../components/TabTaiexDynamic.vue'
@@ -72,6 +76,7 @@ import TabTaiexHistoryMonthly from '../components/TabTaiexHistoryMonthly.vue'
 import TabTmfRetailRatio from '../components/TabTmfRetailRatio.vue'
 import TabLeadIndicator from '../components/TabLeadIndicator.vue'
 import StockChart from '../components/StockChart.vue'
+import TabOptionsChain from '../components/TabOptionsChain.vue'
 
 // 全局引入 ECharts 套件
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
@@ -89,7 +94,8 @@ const currentTabComponent = computed(() => {
     case 'historyMonthly': return TabTaiexHistoryMonthly
     case 'tmf': return TabTmfRetailRatio
     case 'lead': return TabLeadIndicator
-    case 'usstock': return StockChart // 處理新的切換邏輯
+    case 'usstock': return StockChart
+    case 'options': return TabOptionsChain
     default: return TabDashboard
   }
 })
