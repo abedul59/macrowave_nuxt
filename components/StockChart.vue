@@ -11,7 +11,6 @@
           @keyup.enter="fetchData"
         />
         
-        <!-- 🔥 新增：還權 / 非還權 切換開關 -->
         <div class="toggle-switch" @click="toggleAdjusted">
           <div class="slider" :class="{ 'adjusted': isAdjusted }"></div>
           <span :class="{ 'active': !isAdjusted }">非還權</span>
@@ -38,12 +37,12 @@
       {{ error }}
     </div>
 
-    <!-- 🔥 升級：四宮格統計數據 -->
     <div class="stats-container" v-if="stats && !loading && !error">
       <div class="stat-box rise">
         <div class="stat-label">區間單日最大漲幅</div>
+        <!-- 🔥 加上絕對漲跌點數 -->
         <div class="stat-value">+{{ stats.maxRise.toFixed(2) }}%</div>
-        <div class="stat-date">{{ stats.maxRiseDate }}</div>
+        <div class="stat-date">{{ stats.maxRiseDate }} ( +{{ stats.maxRisePoint.toFixed(2) }} 點 )</div>
       </div>
       <div class="stat-box rise">
         <div class="stat-label">平均單日上漲幅度</div>
@@ -52,8 +51,9 @@
       </div>
       <div class="stat-box fall">
         <div class="stat-label">區間單日最大跌幅</div>
+        <!-- 🔥 加上絕對漲跌點數 -->
         <div class="stat-value">{{ stats.maxFall.toFixed(2) }}%</div>
-        <div class="stat-date">{{ stats.maxFallDate }}</div>
+        <div class="stat-date">{{ stats.maxFallDate }} ( {{ stats.maxFallPoint.toFixed(2) }} 點 )</div>
       </div>
       <div class="stat-box fall">
         <div class="stat-label">平均單日下跌幅度</div>
@@ -84,7 +84,7 @@ const ranges = [
 const loading = ref(false);
 const error = ref('');
 const stats = ref(null);
-const rawData = ref([]); // 暫存伺服器抓回來的原始資料，切換還權時不用重新 Fetch
+const rawData = ref([]); 
 const isAdjusted = ref(false);
 
 const chartContainer = ref(null);
@@ -103,27 +103,36 @@ const toggleAdjusted = () => {
   }
 };
 
-// 🔥 升級：計算平均漲跌幅
 const calculateStats = (dates, kLineValues) => {
   let maxRise = 0, maxFall = 0;
   let maxRiseDate = '', maxFallDate = '';
+  // 🔥 新增變數以儲存絕對漲跌點數
+  let maxRisePoint = 0, maxFallPoint = 0;
   let sumRise = 0, countRise = 0;
   let sumFall = 0, countFall = 0;
 
-  // i=1 開始，因為要跟前一天比
   for (let i = 1; i < kLineValues.length; i++) {
-    const prevClose = kLineValues[i - 1][1]; // index 1 是收盤價
+    const prevClose = kLineValues[i - 1][1]; 
     const currClose = kLineValues[i][1];
-    const change = ((currClose - prevClose) / prevClose) * 100;
+    const changePercent = ((currClose - prevClose) / prevClose) * 100;
+    const changePoint = currClose - prevClose;
 
-    if (change > 0) {
-      sumRise += change;
+    if (changePercent > 0) {
+      sumRise += changePercent;
       countRise++;
-      if (change > maxRise) { maxRise = change; maxRiseDate = dates[i]; }
-    } else if (change < 0) {
-      sumFall += change;
+      if (changePercent > maxRise) { 
+        maxRise = changePercent; 
+        maxRiseDate = dates[i]; 
+        maxRisePoint = changePoint; // 紀錄最大漲幅時的點數
+      }
+    } else if (changePercent < 0) {
+      sumFall += changePercent;
       countFall++;
-      if (change < maxFall) { maxFall = change; maxFallDate = dates[i]; }
+      if (changePercent < maxFall) { 
+        maxFall = changePercent; 
+        maxFallDate = dates[i]; 
+        maxFallPoint = changePoint; // 紀錄最大跌幅時的點數
+      }
     }
   }
 
@@ -132,6 +141,7 @@ const calculateStats = (dates, kLineValues) => {
 
   stats.value = { 
     maxRise, maxFall, maxRiseDate, maxFallDate, 
+    maxRisePoint, maxFallPoint,
     avgRise, avgFall, countRise, countFall 
   };
 };
@@ -146,16 +156,14 @@ const renderChart = (data) => {
   const dates = [];
   const kLineValues = [];
 
-  // 🔥 處理還權息邏輯
   data.forEach(item => {
     dates.push(item.time);
     
     if (isAdjusted.value && item.adjclose && item.close) {
-      // 算出還權比例，等比例調整開高低收
       const ratio = item.adjclose / item.close;
       kLineValues.push([
         item.open * ratio,
-        item.close * ratio, // 這裡其實就是 adjclose
+        item.close * ratio, 
         item.low * ratio,
         item.high * ratio
       ]);
@@ -164,16 +172,12 @@ const renderChart = (data) => {
     }
   });
 
-  // 計算並更新統計資料
   calculateStats(dates, kLineValues);
 
-  // ==============================
-  // 📅 事件標記引擎設定
-  // ==============================
-  const existingDatesSet = new Set(dates); // 用於快速檢查日期是否存在圖表區間內
+  const existingDatesSet = new Set(dates); 
   const markLineData = [];
 
-  // 1. 聯準會 FOMC 會議日期 (2023 - 2026)
+  // 保留聯準會 FOMC 會議日期標記
   const fedMeetingDates = [
     '2023-02-01', '2023-03-22', '2023-05-03', '2023-06-14', '2023-07-26', '2023-09-20', '2023-11-01', '2023-12-13',
     '2024-01-31', '2024-03-20', '2024-05-01', '2024-06-12', '2024-07-31', '2024-09-18', '2024-11-07', '2024-12-18',
@@ -191,18 +195,7 @@ const renderChart = (data) => {
     }
   });
 
-  // 2. 財報公佈日 (此處以 AAPL 過去幾次作為示範)
-  const earningsDates = ['2023-02-02', '2023-05-04', '2023-08-03', '2023-11-02', '2024-02-01', '2024-05-02', '2024-08-01', '2024-10-31'];
-  
-  earningsDates.forEach(d => {
-    if (existingDatesSet.has(d)) {
-      markLineData.push({
-        xAxis: d,
-        lineStyle: { color: '#e0ac00', type: 'dotted', opacity: 0.8 },
-        label: { formatter: '財報', position: 'insideEndTop', color: '#e0ac00', fontWeight: 'bold' }
-      });
-    }
-  });
+  // 🔥 已移除財報標記區塊
 
   const option = {
     backgroundColor: 'transparent',
@@ -239,9 +232,8 @@ const renderChart = (data) => {
           borderColor: '#26a69a', 
           borderColor0: '#ef5350' 
         },
-        // 🔥 將事件線條綁定至圖表
         markLine: {
-          symbol: ['none', 'none'], // 不顯示箭頭
+          symbol: ['none', 'none'], 
           data: markLineData
         }
       }
@@ -278,7 +270,7 @@ const fetchData = async () => {
     if (data.error) throw new Error(data.message);
     if (!data || data.length === 0) throw new Error('找不到該股票資料');
 
-    rawData.value = data; // 暫存資料
+    rawData.value = data; 
     
     await nextTick();
     renderChart(rawData.value);
@@ -326,7 +318,6 @@ onUnmounted(() => {
 }
 .ticker-input:focus { border-color: #2962ff; }
 
-/* 🔥 切換按鈕樣式 */
 .toggle-switch {
   display: flex; background-color: #2a2e39; border-radius: 6px;
   position: relative; cursor: pointer; padding: 4px; user-select: none; align-items: center;
@@ -354,7 +345,6 @@ onUnmounted(() => {
 .search-btn:hover { background-color: #1e4bd8; }
 .search-btn:disabled { background-color: #434651; color: #8c8f98; cursor: not-allowed; }
 
-/* 🔥 四宮格統計區塊 */
 .stats-container {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;
 }
