@@ -37,10 +37,10 @@
       {{ error }}
     </div>
 
+    <!-- 四宮格統計數據 -->
     <div class="stats-container" v-if="stats && !loading && !error">
       <div class="stat-box rise">
         <div class="stat-label">區間單日最大漲幅</div>
-        <!-- 🔥 加上絕對漲跌點數 -->
         <div class="stat-value">+{{ stats.maxRise.toFixed(2) }}%</div>
         <div class="stat-date">{{ stats.maxRiseDate }} ( +{{ stats.maxRisePoint.toFixed(2) }} 點 )</div>
       </div>
@@ -51,7 +51,6 @@
       </div>
       <div class="stat-box fall">
         <div class="stat-label">區間單日最大跌幅</div>
-        <!-- 🔥 加上絕對漲跌點數 -->
         <div class="stat-value">{{ stats.maxFall.toFixed(2) }}%</div>
         <div class="stat-date">{{ stats.maxFallDate }} ( {{ stats.maxFallPoint.toFixed(2) }} 點 )</div>
       </div>
@@ -59,6 +58,28 @@
         <div class="stat-label">平均單日下跌幅度</div>
         <div class="stat-value">{{ stats.avgFall.toFixed(2) }}%</div>
         <div class="stat-date">發生次數: {{ stats.countFall }} 次</div>
+      </div>
+    </div>
+
+    <!-- 🔥 新增：漲跌幅分佈統計塊 -->
+    <div class="distribution-wrapper" v-if="stats && !loading && !error">
+      <div class="dist-card rise-dist">
+        <div class="dist-header">🚀 漲幅超過 (發生次數)</div>
+        <div class="dist-body">
+          <div class="dist-item" v-for="i in 6" :key="'r'+i">
+            <span class="dist-label">> {{ i }}%</span>
+            <span class="dist-value text-success">{{ stats.distribution.rise[i] }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="dist-card fall-dist">
+        <div class="dist-header">⚠️ 跌幅超過 (發生次數)</div>
+        <div class="dist-body">
+          <div class="dist-item" v-for="i in 6" :key="'f'+i">
+            <span class="dist-label">< -{{ i }}%</span>
+            <span class="dist-value text-danger">{{ stats.distribution.fall[i] }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -106,10 +127,15 @@ const toggleAdjusted = () => {
 const calculateStats = (dates, kLineValues) => {
   let maxRise = 0, maxFall = 0;
   let maxRiseDate = '', maxFallDate = '';
-  // 🔥 新增變數以儲存絕對漲跌點數
   let maxRisePoint = 0, maxFallPoint = 0;
   let sumRise = 0, countRise = 0;
   let sumFall = 0, countFall = 0;
+
+  // 🔥 建立 1% ~ 6% 的分佈統計物件
+  let distribution = {
+    rise: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+    fall: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }
+  };
 
   for (let i = 1; i < kLineValues.length; i++) {
     const prevClose = kLineValues[i - 1][1]; 
@@ -123,16 +149,31 @@ const calculateStats = (dates, kLineValues) => {
       if (changePercent > maxRise) { 
         maxRise = changePercent; 
         maxRiseDate = dates[i]; 
-        maxRisePoint = changePoint; // 紀錄最大漲幅時的點數
+        maxRisePoint = changePoint; 
       }
+      // 計算上漲分佈
+      if (changePercent >= 1) distribution.rise[1]++;
+      if (changePercent >= 2) distribution.rise[2]++;
+      if (changePercent >= 3) distribution.rise[3]++;
+      if (changePercent >= 4) distribution.rise[4]++;
+      if (changePercent >= 5) distribution.rise[5]++;
+      if (changePercent >= 6) distribution.rise[6]++;
+
     } else if (changePercent < 0) {
       sumFall += changePercent;
       countFall++;
       if (changePercent < maxFall) { 
         maxFall = changePercent; 
         maxFallDate = dates[i]; 
-        maxFallPoint = changePoint; // 紀錄最大跌幅時的點數
+        maxFallPoint = changePoint; 
       }
+      // 計算下跌分佈
+      if (changePercent <= -1) distribution.fall[1]++;
+      if (changePercent <= -2) distribution.fall[2]++;
+      if (changePercent <= -3) distribution.fall[3]++;
+      if (changePercent <= -4) distribution.fall[4]++;
+      if (changePercent <= -5) distribution.fall[5]++;
+      if (changePercent <= -6) distribution.fall[6]++;
     }
   }
 
@@ -142,7 +183,8 @@ const calculateStats = (dates, kLineValues) => {
   stats.value = { 
     maxRise, maxFall, maxRiseDate, maxFallDate, 
     maxRisePoint, maxFallPoint,
-    avgRise, avgFall, countRise, countFall 
+    avgRise, avgFall, countRise, countFall,
+    distribution // 將分佈資料輸出供畫面綁定
   };
 };
 
@@ -177,7 +219,6 @@ const renderChart = (data) => {
   const existingDatesSet = new Set(dates); 
   const markLineData = [];
 
-  // 保留聯準會 FOMC 會議日期標記
   const fedMeetingDates = [
     '2023-02-01', '2023-03-22', '2023-05-03', '2023-06-14', '2023-07-26', '2023-09-20', '2023-11-01', '2023-12-13',
     '2024-01-31', '2024-03-20', '2024-05-01', '2024-06-12', '2024-07-31', '2024-09-18', '2024-11-07', '2024-12-18',
@@ -194,8 +235,6 @@ const renderChart = (data) => {
       });
     }
   });
-
-  // 🔥 已移除財報標記區塊
 
   const option = {
     backgroundColor: 'transparent',
@@ -346,9 +385,10 @@ onUnmounted(() => {
 .search-btn:disabled { background-color: #434651; color: #8c8f98; cursor: not-allowed; }
 
 .stats-container {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px;
 }
 @media (max-width: 992px) { .stats-container { grid-template-columns: repeat(2, 1fr); } }
+
 .stat-box {
   background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px;
   padding: 16px; text-align: center; transition: transform 0.2s;
@@ -358,9 +398,28 @@ onUnmounted(() => {
 .stat-box.fall { border-left: 4px solid #ef5350; }
 .stat-label { color: #8c8f98; font-size: 0.9rem; margin-bottom: 8px; }
 .stat-value { font-size: 1.8rem; font-weight: 700; margin-bottom: 4px; }
-.rise .stat-value { color: #26a69a; }
-.fall .stat-value { color: #ef5350; }
 .stat-date { color: #b2b5be; font-size: 0.85rem; }
+
+/* 🔥 新增：分佈統計區塊的 CSS */
+.distribution-wrapper {
+  display: flex; gap: 16px; margin-bottom: 24px;
+}
+@media (max-width: 992px) { .distribution-wrapper { flex-direction: column; } }
+.dist-card {
+  flex: 1; background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px; padding: 16px;
+}
+.dist-card.rise-dist { border-top: 3px solid #26a69a; }
+.dist-card.fall-dist { border-top: 3px solid #ef5350; }
+.dist-header { font-weight: 600; margin-bottom: 12px; font-size: 1rem; color: #d1d4dc; }
+.dist-body { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.dist-item {
+  display: flex; flex-direction: column; align-items: center; background-color: #2a2e39;
+  padding: 10px; border-radius: 6px; flex: 1; min-width: 50px;
+}
+.dist-label { font-size: 0.85rem; color: #8c8f98; margin-bottom: 4px; }
+.dist-value { font-size: 1.2rem; font-weight: 700; }
+.text-success { color: #26a69a; }
+.text-danger { color: #ef5350; }
 
 .error-message {
   background-color: rgba(239, 83, 80, 0.1); color: #ef5350; padding: 12px 16px;
