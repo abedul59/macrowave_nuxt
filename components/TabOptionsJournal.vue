@@ -72,7 +72,6 @@
                 平倉成本 (Debit): ${{ Number(trade.exit_price).toFixed(2) }}
               </div>
               
-              <!-- 損益顯示 -->
               <div class="trade-pnl mt-3 pt-2 border-top border-secondary fw-bold fs-6" v-if="trade.status === 'closed'">
                 平倉實際損益: 
                 <span :class="trade.pnl > 0 ? 'text-success' : 'text-danger'">
@@ -81,7 +80,8 @@
               </div>
             </div>
             <div class="trade-card-actions mt-3">
-              <button class="action-btn view-btn" @click="openPayoffChart(trade)">📊 損益圖</button>
+              <!-- 🔥 白話文按鈕 -->
+              <button class="action-btn view-btn" @click="openPayoffChart(trade)">📊 預覽到期賺賠圖</button>
               <button class="action-btn edit-btn" @click="editTrade(trade)">編輯 / 平倉</button>
               <button class="action-btn delete-btn" @click="deleteTrade(trade.id)">刪除</button>
             </div>
@@ -154,7 +154,6 @@
             <input type="number" step="0.01" v-model="form.entryPrice" required class="dark-input" />
           </div>
 
-          <!-- 🔥 新增欄位與提示：提早平倉成本 -->
           <div class="form-group border-top border-secondary pt-3 mt-2">
             <label class="text-warning">
               提早平倉成本 (Exit Debit / 點數) 
@@ -163,15 +162,14 @@
             <input type="number" step="0.01" v-model="form.exitPrice" class="dark-input" placeholder="未平倉請留空" />
           </div>
 
-          <!-- 🔥 新增：即時交易試算面板 -->
           <div class="calc-preview mt-3" v-if="formStats">
             <h5 class="calc-title mb-3">💡 交易試算預覽</h5>
             <div class="d-flex justify-content-between mb-2">
-              <span class="text-muted">到期最大營利:</span>
+              <span class="text-muted">到期最多能賺 (Max Profit):</span>
               <span class="text-success fw-bold">${{ formStats.maxProfit.toFixed(2) }}</span>
             </div>
             <div class="d-flex justify-content-between mb-2">
-              <span class="text-muted">到期最大虧損:</span>
+              <span class="text-muted">到期最多會賠 (Max Loss):</span>
               <span class="text-danger fw-bold">${{ formStats.maxLoss.toFixed(2) }}</span>
             </div>
             
@@ -199,7 +197,7 @@
     <div v-if="isChartModalOpen" class="chart-modal-overlay" @click.self="closePayoffChart">
       <div class="chart-modal-content">
         <div class="chart-modal-header border-bottom border-secondary pb-3 mb-3 d-flex justify-content-between align-items-center">
-          <h4 class="m-0 fw-bold text-white">📊 {{ chartTradeData?.ticker }} 到期損益圖 (Payoff Diagram)</h4>
+          <h4 class="m-0 fw-bold text-white">📊 {{ chartTradeData?.ticker }} 到期損益預測圖</h4>
           <button class="close-btn" @click="closePayoffChart">✖</button>
         </div>
         <div class="chart-modal-body">
@@ -286,7 +284,6 @@ const resetStrikes = () => {
   form.value.strikes = { short: null, long: null, longPut: null, shortPut: null, shortCall: null, longCall: null };
 };
 
-// 🔥 新增：即時預覽損益試算
 const formStats = computed(() => {
   const c = form.value;
   if (!c.entryPrice || !c.contracts) return null;
@@ -306,12 +303,10 @@ const formStats = computed(() => {
   const maxLoss = (width - c.entryPrice) * 100 * c.contracts;
   
   let exitPnL = null;
-  // 若使用者填寫了提早平倉成本，立刻算出實際損益
   if (c.exitPrice !== null && c.exitPrice !== '') {
     exitPnL = (c.entryPrice - c.exitPrice) * 100 * c.contracts;
   }
 
-  // 若最大虧損算出來是負數（異常設定），則不顯示預覽
   if (maxLoss < 0 && width !== 0) return null; 
 
   return { width, maxProfit, maxLoss: -maxLoss, exitPnL };
@@ -375,9 +370,8 @@ const cancelEdit = () => {
   form.value = JSON.parse(JSON.stringify(initialForm));
 };
 
-
 // ==========================================
-// 🔥 修正：到期損益圖 (Payoff Diagram)
+// 🔥 徹底修復且更好懂的到期損益圖
 // ==========================================
 const isChartModalOpen = ref(false);
 const chartTradeData = ref(null);
@@ -416,101 +410,103 @@ const renderPayoffChart = (trade) => {
     maxStrike = Math.max(strikes.longPut, strikes.shortPut, strikes.shortCall, strikes.longCall);
   }
 
-  // 🔥 解決圖表消失的關鍵：改用類別 (Category) X 軸對應純數值 Y 軸
-  const xData = [];
-  const yData = [];
+  // 產生 [x, y] 的二維數據陣列 (這是確保連續折線圖畫得出來的唯一正解)
+  const chartData = [];
   
-  const startPrice = minStrike * 0.85;
-  const endPrice = maxStrike * 1.15;
-  const step = (endPrice - startPrice) / 200;
+  const startPrice = minStrike * 0.90; // 往左延伸 10%
+  const endPrice = maxStrike * 1.10;   // 往右延伸 10%
+  const step = (endPrice - startPrice) / 200; // 切 200 個點來畫線
 
   for (let p = startPrice; p <= endPrice; p += step) {
-    xData.push(p.toFixed(2));
     let pnl = 0;
-
     if (strategy === 'vertical') {
       const isCallSpread = strikes.short < strikes.long;
       if (isCallSpread) {
-        const shortLeg = -Math.max(p - strikes.short, 0);
-        const longLeg = Math.max(p - strikes.long, 0);
-        pnl = (entry_price + shortLeg + longLeg) * multiplier;
+        pnl = (entry_price - Math.max(p - strikes.short, 0) + Math.max(p - strikes.long, 0)) * multiplier;
       } else {
-        const shortLeg = -Math.max(strikes.short - p, 0);
-        const longLeg = Math.max(strikes.long - p, 0);
-        pnl = (entry_price + shortLeg + longLeg) * multiplier;
+        pnl = (entry_price - Math.max(strikes.short - p, 0) + Math.max(strikes.long - p, 0)) * multiplier;
       }
     } else if (strategy === 'ironCondor') {
-      const shortPutLeg = -Math.max(strikes.shortPut - p, 0);
-      const longPutLeg = Math.max(strikes.longPut - p, 0);
-      const shortCallLeg = -Math.max(p - strikes.shortCall, 0);
-      const longCallLeg = Math.max(p - strikes.longCall, 0);
-      pnl = (entry_price + shortPutLeg + longPutLeg + shortCallLeg + longCallLeg) * multiplier;
+      pnl = (entry_price 
+             - Math.max(strikes.shortPut - p, 0) 
+             + Math.max(strikes.longPut - p, 0) 
+             - Math.max(p - strikes.shortCall, 0) 
+             + Math.max(p - strikes.longCall, 0)) * multiplier;
     }
     
-    // 只推入單純的數字陣列
-    yData.push(Number(pnl.toFixed(2)));
+    chartData.push([Number(p.toFixed(2)), Number(pnl.toFixed(2))]);
   }
 
   const option = {
     backgroundColor: '#1e222d',
+    title: {
+      text: '🟩 綠色 = 到期能賺錢的股價區間   │   🟥 紅色 = 到期會賠錢的股價區間',
+      left: 'center',
+      top: 10,
+      textStyle: { color: '#b2b5be', fontSize: 13, fontWeight: 'normal' }
+    },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' },
       formatter: (params) => {
-        const price = params[0].name;
-        const pnl = Number(params[0].value);
-        const color = pnl >= 0 ? '#26a69a' : '#ef5350';
-        return `到期結算價: $${price}<br/>總損益: <span style="color:${color};font-weight:bold;">$${pnl.toFixed(2)}</span>`;
+        // 白話文 Tooltip
+        const price = params[0].value[0];
+        const pnl = params[0].value[1];
+        const isWin = pnl >= 0;
+        const color = isWin ? '#26a69a' : '#ef5350';
+        const status = isWin ? '獲利' : '虧損';
+        return `如果到期時股價為: <b>$${price.toFixed(2)}</b><br/>這筆交易將會: <span style="color:${color};font-weight:bold;font-size:16px;">${status} $${Math.abs(pnl).toFixed(2)}</span>`;
       }
     },
     xAxis: {
-      type: 'category', // 🔥 修正為類別軸，徹底解決 visualMap 衝突
-      name: '結算價',
-      data: xData,
+      type: 'value',
+      name: '到期時的股票價格',
+      nameLocation: 'middle',
+      nameGap: 30,
+      nameTextStyle: { color: '#d1d4dc', fontSize: 14 },
+      min: 'dataMin', 
+      max: 'dataMax',
       axisLine: { lineStyle: { color: '#8c8f98' } },
-      axisLabel: {
-        formatter: function (value, index) {
-          // 只顯示部分 X 軸標籤避免過度擁擠
-          return index % 20 === 0 ? value : '';
-        }
-      }
+      splitLine: { show: false }
     },
     yAxis: {
       type: 'value',
-      name: '總損益 (USD)',
+      name: '您的總賺賠 (USD)',
+      nameTextStyle: { color: '#d1d4dc', fontSize: 14 },
       axisLine: { lineStyle: { color: '#8c8f98' } },
       splitLine: { lineStyle: { color: '#2b2b43' } }
     },
+    // 🔥 利用 visualMap 正確為線條與面積上色
     visualMap: {
       show: false,
+      dimension: 1, // 根據 Y 軸資料判斷
       pieces: [
-        { gt: 0, color: '#26a69a' }, 
-        { lte: 0, color: '#ef5350' }
+        { min: 0, color: '#26a69a' }, // 大於等於 0 為綠色
+        { max: 0, color: '#ef5350' }  // 小於 0 為紅色
       ]
     },
     series: [
       {
-        data: yData,
+        data: chartData,
         type: 'line',
         symbol: 'none',
-        lineStyle: { width: 3 },
-        areaStyle: { opacity: 0.1 }, // 增加下方淡色填滿，更有設計感
+        lineStyle: { width: 4 },
+        areaStyle: { opacity: 0.2 }, // 填充顏色，讓獲利/虧損區間一目了然
         markLine: {
           silent: true,
           symbol: 'none',
           label: { position: 'end', formatter: '{b}', color: '#fff' },
           data: [
-            { yAxis: 0, lineStyle: { color: '#8c8f98', type: 'dashed' }, name: '損益兩平' }
+            { yAxis: 0, lineStyle: { color: '#8c8f98', type: 'solid', width: 2 }, name: '不賺不賠線 (0元)' }
           ]
         },
         markPoint: {
           symbol: 'pin',
-          symbolSize: 50,
-          label: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
-          itemStyle: { color: '#e0ac00' },
+          symbolSize: 60,
+          label: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
           data: [
-            { type: 'max', name: 'Max' },
-            { type: 'min', name: 'Min' }
+            { type: 'max', name: '最多能賺', itemStyle: { color: '#26a69a' } },
+            { type: 'min', name: '最多會賠', itemStyle: { color: '#ef5350' } }
           ]
         }
       }
@@ -580,7 +576,7 @@ const renderPayoffChart = (trade) => {
 .strikes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .strikes-grid-4 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-/* 🔥 試算面板樣式 */
+/* 試算面板樣式 */
 .calc-preview { background-color: #131722; border: 1px dashed #434651; padding: 16px; border-radius: 8px; }
 .calc-title { color: #e0ac00; margin-top: 0; }
 .fs-7 { font-size: 0.8rem; }
