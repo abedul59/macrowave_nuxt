@@ -83,12 +83,22 @@
       </div>
     </div>
 
-    <!-- 🔥 新增：歷史波段目標觸及機率 (滾動回測) -->
+    <!-- 波段目標觸及機率 (滾動回測) -->
     <div class="prob-wrapper" v-if="probStats && !loading && !error">
       <h3 class="prob-title">🎯 歷史波段目標觸及機率 (基於目前查詢區間)</h3>
-      <p class="prob-desc">以歷史每日收盤價買入，在未來指定週數內，最高價/最低價觸及目標的機率。</p>
       
-      <div class="prob-tables">
+      <!-- 🔥 新增：白話文解說面板 -->
+      <div class="prob-explanation">
+        <h5 class="fw-bold text-info mb-2">💡 我該如何解讀這張表？</h5>
+        <p class="mb-2">這張表是量化交易的<strong>「歷史回測勝率」</strong>。系統將所選歷史區間內的<strong>每一天</strong>都當作買進點，統計在接下來的 1 到 3 週內，最高價或最低價是否曾經碰到對應的漲跌幅。</p>
+        <div class="highlight-text">
+          <strong>實戰應用 (若您在今日或昨日收盤買入)：</strong><br>
+          請把下方的機率當作您<strong>「現在進場的預期勝率」</strong>。例如：若「一週內 +5%」的機率為 22%，代表歷史數據告訴您，現在買進後能在一週內快速獲利 5% 的機會約為兩成。<br>
+          👉 <strong>用途：</strong> 幫助您評估設定的停利/停損目標，是否符合這檔股票的真實股性，避免過度樂觀。
+        </div>
+      </div>
+      
+      <div class="prob-tables mt-3">
         <!-- 上漲機率表 -->
         <div class="prob-card">
           <div class="prob-header text-success">📈 多方目標 (上漲)</div>
@@ -159,7 +169,7 @@ const ranges = [
 const loading = ref(false);
 const error = ref('');
 const stats = ref(null);
-const probStats = ref(null); // 🔥 新增機率統計狀態
+const probStats = ref(null); 
 const rawData = ref([]); 
 const isAdjusted = ref(false);
 
@@ -239,9 +249,7 @@ const calculateStats = (dates, kLineValues) => {
   };
 };
 
-// 🔥 新增：計算波段觸及機率
 const calculateProbabilities = (kLineValues) => {
-  // 定義交易日週期：一週約 5 天，兩週 10 天，三週 15 天
   const horizons = [5, 10, 15]; 
   const thresholds = [5, 10, 15, 20, 25, 30];
 
@@ -253,18 +261,15 @@ const calculateProbabilities = (kLineValues) => {
 
   let totalCounts = [0, 0, 0];
 
-  // 走訪歷史每一天 (做為買入起點)
   for (let i = 0; i < kLineValues.length; i++) {
-    const currentClose = kLineValues[i][1]; // kLineValues 結構: [open, close, low, high]
+    const currentClose = kLineValues[i][1]; 
 
     horizons.forEach((days, hIndex) => {
-      // 確保未來還有足夠的天數可以觀察
       if (i + days < kLineValues.length) {
         totalCounts[hIndex]++;
         let maxHigh = -Infinity;
         let minLow = Infinity;
 
-        // 觀察未來 N 天內的最高點與最低點
         for (let j = 1; j <= days; j++) {
            const high = kLineValues[i + j][3]; 
            const low = kLineValues[i + j][2];  
@@ -275,16 +280,14 @@ const calculateProbabilities = (kLineValues) => {
         const maxRisePct = ((maxHigh - currentClose) / currentClose) * 100;
         const maxFallPct = ((minLow - currentClose) / currentClose) * 100;
 
-        // 統計是否觸及目標
         thresholds.forEach(t => {
           if (maxRisePct >= t) results.rise[t][hIndex]++;
-          if (maxFallPct <= -t) results.fall[t][hIndex]++; // maxFallPct 為負數
+          if (maxFallPct <= -t) results.fall[t][hIndex]++; 
         });
       }
     });
   }
 
-  // 將次數轉換為百分比機率
   thresholds.forEach(t => {
     for (let hIndex = 0; hIndex < 3; hIndex++) {
        const total = totalCounts[hIndex];
@@ -323,7 +326,7 @@ const renderChart = (data) => {
   });
 
   calculateStats(dates, kLineValues);
-  calculateProbabilities(kLineValues); // 🔥 執行機率運算
+  calculateProbabilities(kLineValues); 
 
   const existingDatesSet = new Set(dates); 
   const markLineData = [];
@@ -530,8 +533,27 @@ onUnmounted(() => {
   background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px;
   padding: 20px; margin-bottom: 24px;
 }
-.prob-title { margin-top: 0; margin-bottom: 8px; font-size: 1.2rem; color: #fff; }
-.prob-desc { color: #8c8f98; font-size: 0.9rem; margin-bottom: 16px; }
+.prob-title { margin-top: 0; margin-bottom: 12px; font-size: 1.2rem; color: #fff; }
+
+/* 🔥 說明面板樣式 */
+.prob-explanation {
+  background-color: rgba(38, 166, 154, 0.05);
+  border-left: 4px solid #26a69a;
+  padding: 16px;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 20px;
+  color: #d1d4dc;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.highlight-text {
+  background-color: #2a2e39;
+  padding: 12px;
+  border-radius: 6px;
+  margin-top: 8px;
+  border: 1px solid #434651;
+}
+
 .prob-tables { display: flex; gap: 16px; }
 @media (max-width: 992px) { .prob-tables { flex-direction: column; } }
 .prob-card { flex: 1; background-color: #2a2e39; border-radius: 6px; overflow: hidden; }
