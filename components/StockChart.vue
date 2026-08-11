@@ -61,10 +61,10 @@
       </div>
     </div>
 
-    <!-- 🔥 新增：漲跌幅分佈統計塊 -->
+    <!-- 漲跌幅分佈統計塊 -->
     <div class="distribution-wrapper" v-if="stats && !loading && !error">
       <div class="dist-card rise-dist">
-        <div class="dist-header">🚀 漲幅超過 (發生次數)</div>
+        <div class="dist-header">🚀 單日漲幅超過 (發生次數)</div>
         <div class="dist-body">
           <div class="dist-item" v-for="i in 6" :key="'r'+i">
             <span class="dist-label">> {{ i }}%</span>
@@ -73,12 +73,66 @@
         </div>
       </div>
       <div class="dist-card fall-dist">
-        <div class="dist-header">⚠️ 跌幅超過 (發生次數)</div>
+        <div class="dist-header">⚠️ 單日跌幅超過 (發生次數)</div>
         <div class="dist-body">
           <div class="dist-item" v-for="i in 6" :key="'f'+i">
             <span class="dist-label">< -{{ i }}%</span>
             <span class="dist-value text-danger">{{ stats.distribution.fall[i] }}</span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🔥 新增：歷史波段目標觸及機率 (滾動回測) -->
+    <div class="prob-wrapper" v-if="probStats && !loading && !error">
+      <h3 class="prob-title">🎯 歷史波段目標觸及機率 (基於目前查詢區間)</h3>
+      <p class="prob-desc">以歷史每日收盤價買入，在未來指定週數內，最高價/最低價觸及目標的機率。</p>
+      
+      <div class="prob-tables">
+        <!-- 上漲機率表 -->
+        <div class="prob-card">
+          <div class="prob-header text-success">📈 多方目標 (上漲)</div>
+          <table class="prob-table">
+            <thead>
+              <tr>
+                <th>目標幅度</th>
+                <th>一週內 (5T)</th>
+                <th>兩週內 (10T)</th>
+                <th>三週內 (15T)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="t in probStats.thresholds" :key="'rise_'+t">
+                <td class="fw-bold text-success">+{{ t }}%</td>
+                <td>{{ probStats.results.rise[t][0] }}%</td>
+                <td>{{ probStats.results.rise[t][1] }}%</td>
+                <td>{{ probStats.results.rise[t][2] }}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 下跌機率表 -->
+        <div class="prob-card">
+          <div class="prob-header text-danger">📉 空方目標 (下跌)</div>
+          <table class="prob-table">
+            <thead>
+              <tr>
+                <th>目標幅度</th>
+                <th>一週內 (5T)</th>
+                <th>兩週內 (10T)</th>
+                <th>三週內 (15T)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="t in probStats.thresholds" :key="'fall_'+t">
+                <td class="fw-bold text-danger">-{{ t }}%</td>
+                <td>{{ probStats.results.fall[t][0] }}%</td>
+                <td>{{ probStats.results.fall[t][1] }}%</td>
+                <td>{{ probStats.results.fall[t][2] }}%</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -105,6 +159,7 @@ const ranges = [
 const loading = ref(false);
 const error = ref('');
 const stats = ref(null);
+const probStats = ref(null); // 🔥 新增機率統計狀態
 const rawData = ref([]); 
 const isAdjusted = ref(false);
 
@@ -131,7 +186,6 @@ const calculateStats = (dates, kLineValues) => {
   let sumRise = 0, countRise = 0;
   let sumFall = 0, countFall = 0;
 
-  // 🔥 建立 1% ~ 6% 的分佈統計物件
   let distribution = {
     rise: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
     fall: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }
@@ -151,14 +205,12 @@ const calculateStats = (dates, kLineValues) => {
         maxRiseDate = dates[i]; 
         maxRisePoint = changePoint; 
       }
-      // 計算上漲分佈
       if (changePercent >= 1) distribution.rise[1]++;
       if (changePercent >= 2) distribution.rise[2]++;
       if (changePercent >= 3) distribution.rise[3]++;
       if (changePercent >= 4) distribution.rise[4]++;
       if (changePercent >= 5) distribution.rise[5]++;
       if (changePercent >= 6) distribution.rise[6]++;
-
     } else if (changePercent < 0) {
       sumFall += changePercent;
       countFall++;
@@ -167,7 +219,6 @@ const calculateStats = (dates, kLineValues) => {
         maxFallDate = dates[i]; 
         maxFallPoint = changePoint; 
       }
-      // 計算下跌分佈
       if (changePercent <= -1) distribution.fall[1]++;
       if (changePercent <= -2) distribution.fall[2]++;
       if (changePercent <= -3) distribution.fall[3]++;
@@ -184,8 +235,65 @@ const calculateStats = (dates, kLineValues) => {
     maxRise, maxFall, maxRiseDate, maxFallDate, 
     maxRisePoint, maxFallPoint,
     avgRise, avgFall, countRise, countFall,
-    distribution // 將分佈資料輸出供畫面綁定
+    distribution 
   };
+};
+
+// 🔥 新增：計算波段觸及機率
+const calculateProbabilities = (kLineValues) => {
+  // 定義交易日週期：一週約 5 天，兩週 10 天，三週 15 天
+  const horizons = [5, 10, 15]; 
+  const thresholds = [5, 10, 15, 20, 25, 30];
+
+  let results = { rise: {}, fall: {} };
+  thresholds.forEach(t => {
+    results.rise[t] = [0, 0, 0];
+    results.fall[t] = [0, 0, 0];
+  });
+
+  let totalCounts = [0, 0, 0];
+
+  // 走訪歷史每一天 (做為買入起點)
+  for (let i = 0; i < kLineValues.length; i++) {
+    const currentClose = kLineValues[i][1]; // kLineValues 結構: [open, close, low, high]
+
+    horizons.forEach((days, hIndex) => {
+      // 確保未來還有足夠的天數可以觀察
+      if (i + days < kLineValues.length) {
+        totalCounts[hIndex]++;
+        let maxHigh = -Infinity;
+        let minLow = Infinity;
+
+        // 觀察未來 N 天內的最高點與最低點
+        for (let j = 1; j <= days; j++) {
+           const high = kLineValues[i + j][3]; 
+           const low = kLineValues[i + j][2];  
+           if (high > maxHigh) maxHigh = high;
+           if (low < minLow) minLow = low;
+        }
+
+        const maxRisePct = ((maxHigh - currentClose) / currentClose) * 100;
+        const maxFallPct = ((minLow - currentClose) / currentClose) * 100;
+
+        // 統計是否觸及目標
+        thresholds.forEach(t => {
+          if (maxRisePct >= t) results.rise[t][hIndex]++;
+          if (maxFallPct <= -t) results.fall[t][hIndex]++; // maxFallPct 為負數
+        });
+      }
+    });
+  }
+
+  // 將次數轉換為百分比機率
+  thresholds.forEach(t => {
+    for (let hIndex = 0; hIndex < 3; hIndex++) {
+       const total = totalCounts[hIndex];
+       results.rise[t][hIndex] = total > 0 ? ((results.rise[t][hIndex] / total) * 100).toFixed(1) : 0;
+       results.fall[t][hIndex] = total > 0 ? ((results.fall[t][hIndex] / total) * 100).toFixed(1) : 0;
+    }
+  });
+
+  probStats.value = { results, thresholds, horizons, totalCounts };
 };
 
 const renderChart = (data) => {
@@ -215,6 +323,7 @@ const renderChart = (data) => {
   });
 
   calculateStats(dates, kLineValues);
+  calculateProbabilities(kLineValues); // 🔥 執行機率運算
 
   const existingDatesSet = new Set(dates); 
   const markLineData = [];
@@ -400,14 +509,9 @@ onUnmounted(() => {
 .stat-value { font-size: 1.8rem; font-weight: 700; margin-bottom: 4px; }
 .stat-date { color: #b2b5be; font-size: 0.85rem; }
 
-/* 🔥 新增：分佈統計區塊的 CSS */
-.distribution-wrapper {
-  display: flex; gap: 16px; margin-bottom: 24px;
-}
+.distribution-wrapper { display: flex; gap: 16px; margin-bottom: 16px; }
 @media (max-width: 992px) { .distribution-wrapper { flex-direction: column; } }
-.dist-card {
-  flex: 1; background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px; padding: 16px;
-}
+.dist-card { flex: 1; background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px; padding: 16px; }
 .dist-card.rise-dist { border-top: 3px solid #26a69a; }
 .dist-card.fall-dist { border-top: 3px solid #ef5350; }
 .dist-header { font-weight: 600; margin-bottom: 12px; font-size: 1rem; color: #d1d4dc; }
@@ -420,6 +524,23 @@ onUnmounted(() => {
 .dist-value { font-size: 1.2rem; font-weight: 700; }
 .text-success { color: #26a69a; }
 .text-danger { color: #ef5350; }
+
+/* 🔥 機率統計區域樣式 */
+.prob-wrapper {
+  background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px;
+  padding: 20px; margin-bottom: 24px;
+}
+.prob-title { margin-top: 0; margin-bottom: 8px; font-size: 1.2rem; color: #fff; }
+.prob-desc { color: #8c8f98; font-size: 0.9rem; margin-bottom: 16px; }
+.prob-tables { display: flex; gap: 16px; }
+@media (max-width: 992px) { .prob-tables { flex-direction: column; } }
+.prob-card { flex: 1; background-color: #2a2e39; border-radius: 6px; overflow: hidden; }
+.prob-header { padding: 12px 16px; font-weight: bold; background-color: rgba(0,0,0,0.2); }
+.prob-table { width: 100%; border-collapse: collapse; text-align: right; }
+.prob-table th, .prob-table td { padding: 10px 16px; border-bottom: 1px solid #1e222d; }
+.prob-table th { color: #8c8f98; font-weight: 500; text-align: right; }
+.prob-table tbody tr:last-child td { border-bottom: none; }
+.prob-table tbody tr:hover { background-color: rgba(255,255,255,0.02); }
 
 .error-message {
   background-color: rgba(239, 83, 80, 0.1); color: #ef5350; padding: 12px 16px;
