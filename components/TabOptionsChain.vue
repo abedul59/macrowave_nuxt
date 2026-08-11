@@ -11,7 +11,6 @@
           @keyup.enter="fetchData()"
         />
         
-        <!-- 到期日下拉選單 (有資料時才顯示) -->
         <select 
           v-if="availableDates.length > 0" 
           v-model="selectedDate" 
@@ -35,6 +34,63 @@
 
     <div v-if="underlyingPrice && !loading" class="quote-info">
       現價: <span class="fw-bold text-white">${{ underlyingPrice.toFixed(2) }}</span>
+    </div>
+
+    <!-- 🔥 新增：貸方策略保證金試算機 -->
+    <div class="calculator-section">
+      <div class="calc-header d-flex align-items-center gap-3 mb-3">
+        <h4 class="m-0 text-white fw-bold">💡 貸方策略保證金試算 (Credit Spreads)</h4>
+        <select v-model="calcStrategy" class="strategy-select">
+          <option value="vertical">垂直價差 (Vertical Spread)</option>
+          <option value="ironCondor">鐵鷹 (Iron Condor)</option>
+        </select>
+        <div class="contracts-input-wrapper">
+          <label>口數:</label>
+          <input type="number" v-model="calcContracts" min="1" class="calc-input small-input" />
+        </div>
+      </div>
+
+      <div class="calc-body">
+        <!-- 垂直價差輸入區 -->
+        <div v-if="calcStrategy === 'vertical'" class="calc-inputs-row">
+          <div class="input-group">
+            <span class="sell-label">賣出 (Short) 履約價:</span>
+            <input type="number" v-model="vertShortStrike" placeholder="例: 150" class="calc-input" />
+          </div>
+          <div class="input-group">
+            <span class="buy-label">買入 (Long) 履約價:</span>
+            <input type="number" v-model="vertLongStrike" placeholder="例: 145" class="calc-input" />
+          </div>
+        </div>
+
+        <!-- 鐵鷹輸入區 -->
+        <div v-if="calcStrategy === 'ironCondor'" class="calc-inputs-grid">
+          <div class="input-group put-side">
+            <span class="buy-label">買入 Put (Long):</span>
+            <input type="number" v-model="icLongPut" placeholder="保護部位" class="calc-input" />
+          </div>
+          <div class="input-group put-side">
+            <span class="sell-label">賣出 Put (Short):</span>
+            <input type="number" v-model="icShortPut" placeholder="收租部位" class="calc-input" />
+          </div>
+          <div class="input-group call-side">
+            <span class="sell-label">賣出 Call (Short):</span>
+            <input type="number" v-model="icShortCall" placeholder="收租部位" class="calc-input" />
+          </div>
+          <div class="input-group call-side">
+            <span class="buy-label">買入 Call (Long):</span>
+            <input type="number" v-model="icLongCall" placeholder="保護部位" class="calc-input" />
+          </div>
+        </div>
+
+        <!-- 試算結果顯示 -->
+        <div class="margin-result">
+          預估保證金 (Buying Power Effect): 
+          <span class="fw-bold fs-3 ms-2" :class="{'text-warning': calculatedMargin > 0, 'text-muted': calculatedMargin === 0}">
+            ${{ calculatedMargin.toLocaleString() }}
+          </span>
+        </div>
+      </div>
     </div>
 
     <!-- 買權與賣權切換標籤 -->
@@ -92,9 +148,45 @@ const optionsData = ref(null);
 const availableDates = ref([]);
 const selectedDate = ref('');
 const underlyingPrice = ref(0);
-const currentType = ref('calls'); // 預設顯示買權
+const currentType = ref('calls'); 
 
-// 動態切換顯示 Calls 或 Puts
+// 🔥 保證金試算機狀態
+const calcStrategy = ref('vertical');
+const calcContracts = ref(1);
+
+// 垂直價差變數
+const vertShortStrike = ref(null);
+const vertLongStrike = ref(null);
+
+// 鐵鷹變數
+const icLongPut = ref(null);
+const icShortPut = ref(null);
+const icShortCall = ref(null);
+const icLongCall = ref(null);
+
+// 計算保證金邏輯
+const calculatedMargin = computed(() => {
+  if (calcContracts.value <= 0) return 0;
+
+  if (calcStrategy.value === 'vertical') {
+    if (!vertShortStrike.value || !vertLongStrike.value) return 0;
+    // 垂直價差保證金 = 履約價差 * 100 * 口數
+    const width = Math.abs(vertShortStrike.value - vertLongStrike.value);
+    return width * 100 * calcContracts.value;
+  } 
+  
+  if (calcStrategy.value === 'ironCondor') {
+    if (!icLongPut.value || !icShortPut.value || !icShortCall.value || !icLongCall.value) return 0;
+    // 鐵鷹保證金 = 取 Call 端與 Put 端最大的履約價差 * 100 * 口數
+    const putWidth = Math.abs(icShortPut.value - icLongPut.value);
+    const callWidth = Math.abs(icShortCall.value - icLongCall.value);
+    const maxWidth = Math.max(putWidth, callWidth);
+    return maxWidth * 100 * calcContracts.value;
+  }
+
+  return 0;
+});
+
 const currentTableData = computed(() => {
   if (!optionsData.value) return [];
   return currentType.value === 'calls' ? optionsData.value.calls : optionsData.value.puts;
@@ -127,20 +219,18 @@ const fetchData = async (specificDate = '') => {
     if (data.error) throw new Error(data.message);
     if (!data.options || data.options.length === 0) throw new Error('找不到該股票的選擇權資料');
 
-    // 處理可用的到期日清單
     if (data.expirationDates && data.expirationDates.length > 0) {
       availableDates.value = data.expirationDates.map(dateStr => ({
         raw: dateStr,
         formatted: formatExpirationDate(dateStr)
       }));
-      // 如果是第一次搜尋，自動將下拉選單設為最近的到期日
       if (!specificDate) {
         selectedDate.value = data.expirationDates[0];
       }
     }
 
     underlyingPrice.value = data.quote.regularMarketPrice;
-    optionsData.value = data.options[0]; // Yahoo 回傳的結構中，目標日期的資料會放在 index 0
+    optionsData.value = data.options[0]; 
     
   } catch (err) {
     error.value = err.message;
@@ -167,11 +257,11 @@ const fetchData = async (specificDate = '') => {
 .title { margin: 0; font-size: 1.5rem; font-weight: 600; color: #fff; }
 .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 
-.ticker-input, .date-select {
+.ticker-input, .date-select, .strategy-select {
   background-color: #2a2e39; border: 1px solid #434651; color: #fff;
   padding: 10px 16px; border-radius: 6px; font-size: 14px; outline: none;
 }
-.ticker-input:focus, .date-select:focus { border-color: #2962ff; }
+.ticker-input:focus, .date-select:focus, .strategy-select:focus { border-color: #2962ff; }
 .ticker-input { width: 150px; }
 
 .search-btn {
@@ -186,13 +276,41 @@ const fetchData = async (specificDate = '') => {
   border-radius: 6px; margin-bottom: 24px; border: 1px solid rgba(239, 83, 80, 0.2);
 }
 
-.quote-info {
-  margin-bottom: 20px; font-size: 1.2rem; color: #8c8f98;
+.quote-info { margin-bottom: 20px; font-size: 1.2rem; color: #8c8f98; }
+
+/* 🔥 試算機樣式 */
+.calculator-section {
+  background-color: #1e222d;
+  border: 1px solid #2b2b43;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.calc-header { border-bottom: 1px solid #2b2b43; padding-bottom: 16px; flex-wrap: wrap; }
+.contracts-input-wrapper { display: flex; align-items: center; gap: 8px; color: #8c8f98; }
+.calc-input {
+  background-color: #2a2e39; border: 1px solid #434651; color: #fff;
+  padding: 8px 12px; border-radius: 6px; outline: none;
+}
+.calc-input:focus { border-color: #2962ff; }
+.small-input { width: 80px; }
+.calc-body { padding-top: 16px; }
+.calc-inputs-row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; }
+.calc-inputs-grid { 
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+  gap: 16px; margin-bottom: 16px; 
+}
+.input-group { display: flex; flex-direction: column; gap: 6px; }
+.sell-label { color: #ef5350; font-weight: bold; font-size: 0.9rem; }
+.buy-label { color: #26a69a; font-weight: bold; font-size: 0.9rem; }
+.put-side { border-left: 3px solid #ef5350; padding-left: 10px; }
+.call-side { border-left: 3px solid #26a69a; padding-left: 10px; }
+.margin-result {
+  background-color: #2a2e39; padding: 16px; border-radius: 6px;
+  text-align: right; color: #8c8f98; font-size: 1.1rem;
 }
 
-.type-tabs {
-  display: flex; gap: 10px; margin-bottom: 16px;
-}
+.type-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
 .tab-btn {
   background-color: #2a2e39; border: 1px solid #434651; color: #8c8f98;
   padding: 10px 24px; border-radius: 6px; font-size: 14px; cursor: pointer; transition: all 0.2s;
@@ -204,21 +322,11 @@ const fetchData = async (specificDate = '') => {
   overflow-x: auto; border: 1px solid #2b2b43; border-radius: 8px; background-color: #1e222d;
   max-height: 600px; overflow-y: auto;
 }
-
-.options-table {
-  width: 100%; border-collapse: collapse; text-align: right; white-space: nowrap;
-}
-.options-table th, .options-table td {
-  padding: 12px 16px; border-bottom: 1px solid #2b2b43;
-}
-.options-table th {
-  background-color: #2a2e39; color: #8c8f98; font-weight: 500; position: sticky; top: 0; z-index: 10;
-}
+.options-table { width: 100%; border-collapse: collapse; text-align: right; white-space: nowrap; }
+.options-table th, .options-table td { padding: 12px 16px; border-bottom: 1px solid #2b2b43; }
+.options-table th { background-color: #2a2e39; color: #8c8f98; font-weight: 500; position: sticky; top: 0; z-index: 10; }
 .options-table tbody tr:hover { background-color: #2a2e39; }
-
-/* 價內 (ITM) 的標記樣式 */
 .itm-row { background-color: rgba(41, 98, 255, 0.05); }
-
 .strike-cell { color: #2962ff; }
 .iv-cell { color: #e0ac00; }
 </style>
