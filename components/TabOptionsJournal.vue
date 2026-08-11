@@ -59,7 +59,12 @@
               <span class="strategy-badge">{{ getStrategyName(trade.strategy) }}</span>
             </div>
             <div class="trade-card-body">
-              <div class="trade-detail">到期日: {{ trade.expiry }}</div>
+              <!-- 🔥 日期顯示大更新 -->
+              <div class="trade-detail d-flex gap-3 mb-2">
+                <span class="text-success">🟢 建倉: {{ trade.date }}</span>
+                <span class="text-danger" v-if="trade.exit_date">🔴 平倉: {{ trade.exit_date }}</span>
+                <span class="text-info">⏳ 到期: {{ trade.expiry }}</span>
+              </div>
               
               <div class="trade-detail strikes-detail">
                 履約價: 
@@ -83,7 +88,7 @@
                 建倉總收租 (Credit): ${{ Number(trade.entry_price).toFixed(2) }}
               </div>
               
-              <!-- 🔥 鐵鷹雙邊平倉顯示 -->
+              <!-- 鐵鷹雙邊平倉顯示 -->
               <div class="trade-detail text-warning" v-if="trade.strategy === 'ironCondor' && (trade.strikes.exitPut !== null || trade.strikes.exitCall !== null)">
                 平倉支出 (Debit): 
                 <span v-if="trade.strikes.exitPut !== null">Put端 ${{ Number(trade.strikes.exitPut).toFixed(2) }}</span>
@@ -114,13 +119,20 @@
       <!-- 右側：新增/編輯表單 -->
       <div class="form-section">
         <h3 class="text-white mb-4 border-bottom border-secondary pb-2">
-          {{ isEditing ? '✏️ 編輯交易' : '📝 新增交易' }} ({{ selectedDateStr }})
+          {{ isEditing ? '✏️ 編輯交易' : '📝 新增交易' }} 
         </h3>
         
         <form @submit.prevent="saveTrade" class="trade-form">
-          <div class="form-group">
-            <label>股票代號 (Ticker)</label>
-            <input type="text" v-model="form.ticker" required placeholder="例: SPY" class="dark-input" />
+          <div class="d-flex gap-3 mb-3">
+            <div class="form-group flex-fill mb-0">
+              <label>股票代號 (Ticker)</label>
+              <input type="text" v-model="form.ticker" required placeholder="例: SPY" class="dark-input" />
+            </div>
+            <!-- 🔥 新增建倉日期欄位 -->
+            <div class="form-group flex-fill mb-0">
+              <label>建倉日期 (Open Date)</label>
+              <input type="date" v-model="form.date" required class="dark-input" />
+            </div>
           </div>
 
           <div class="form-group">
@@ -189,14 +201,20 @@
             <input type="number" step="0.01" v-model.number="form.entryPrice" required class="dark-input" />
           </div>
 
-          <!-- 🔥 動態平倉區塊 -->
+          <!-- 動態平倉區塊 -->
           <div class="border-top border-secondary pt-3 mt-2">
             <h5 class="text-warning mb-3">🚪 平倉紀錄區 (未平倉請留空)</h5>
             
+            <!-- 🔥 新增平倉日期欄位 -->
+            <div class="form-group">
+              <label class="text-warning">平倉日期 (Close Date)</label>
+              <input type="date" v-model="form.exitDate" class="dark-input" />
+            </div>
+
             <!-- 單邊策略的單一平倉輸入 -->
             <div class="form-group" v-if="form.strategy !== 'ironCondor'">
               <label class="text-warning">平倉支出成本 (Exit Debit)</label>
-              <input type="number" step="0.01" v-model.number="form.exitPrice" class="dark-input" placeholder="若到期歸零免付錢請填 0" />
+              <input type="number" step="0.01" v-model.number="form.exitPrice" class="dark-input" placeholder="若到期歸零請填 0" />
             </div>
 
             <!-- 鐵鷹策略的雙邊平倉輸入 -->
@@ -212,7 +230,7 @@
             </div>
           </div>
 
-          <!-- 🔥 試算預覽面板 (針對鐵鷹詳細拆解) -->
+          <!-- 試算預覽面板 -->
           <div class="calc-preview mt-3" v-if="formStats">
             <h5 class="calc-title mb-3">💡 交易試算預覽</h5>
             <div class="d-flex justify-content-between mb-2">
@@ -231,7 +249,6 @@
                 <span>${{ formStats.maxProfit.toFixed(2) }}</span>
               </div>
               
-              <!-- 顯示鐵鷹個別平倉明細 -->
               <template v-if="form.strategy === 'ironCondor'">
                 <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="form.strikes.exitPut !== null && form.strikes.exitPut !== ''">
                   <span>➖ Put 邊支出:</span>
@@ -243,7 +260,6 @@
                 </div>
               </template>
               
-              <!-- 顯示垂直價差平倉明細 -->
               <template v-else>
                 <div class="d-flex justify-content-between fs-7 mb-1 text-danger">
                   <span>➖ 平倉總支出:</span>
@@ -289,7 +305,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import * as echarts from 'echarts';
 
 const supabase = useSupabaseClient();
@@ -330,6 +346,7 @@ const fetchTrades = async () => {
 
 onMounted(() => { fetchTrades(); });
 
+// 以建倉日期 (trade.date) 來決定顯示在哪一天
 const dailyTrades = computed(() => { return allTrades.value.filter(t => t.date === selectedDateStr.value); });
 const hasTradeOnDate = (day) => {
   const checkDate = `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -347,15 +364,24 @@ const isEditing = ref(false);
 const editingId = ref(null);
 
 const initialForm = {
+  date: '', // 建倉日期
   ticker: '',
   strategy: 'bullPut',
   expiry: '',
   strikes: { shortPut: null, longPut: null, shortCall: null, longCall: null, exitPut: null, exitCall: null },
   contracts: 1,
   entryPrice: null,
-  exitPrice: null
+  exitPrice: null,
+  exitDate: '' // 平倉日期
 };
 const form = ref(JSON.parse(JSON.stringify(initialForm)));
+
+// 當月曆選擇日期改變時，如果是新增模式，連動更新表單的建倉日期
+watch(selectedDateStr, (newVal) => {
+  if (!isEditing.value) {
+    form.value.date = newVal;
+  }
+}, { immediate: true });
 
 const resetStrikes = () => {
   form.value.strikes = { shortPut: null, longPut: null, shortCall: null, longCall: null, exitPut: null, exitCall: null };
@@ -383,7 +409,6 @@ const getSafeStrikes = (strategy, strikes) => {
   return { sP, lP, sC, lC, s, l };
 };
 
-// 🔥 精準計算雙邊平倉邏輯
 const formStats = computed(() => {
   const c = form.value;
   if (!c.entryPrice || !c.contracts) return null;
@@ -440,7 +465,6 @@ const saveTrade = async () => {
       totalExitPrice = Number(form.value.strikes.exitPut || 0) + Number(form.value.strikes.exitCall || 0);
       pnl = (form.value.entryPrice - totalExitPrice) * 100 * form.value.contracts;
     }
-    // 兩邊都填數字(包含0)才算真正結案
     if (hasPut && hasCall) isClosed = true;
   } else {
     if (form.value.exitPrice !== null && form.value.exitPrice !== '') {
@@ -451,7 +475,7 @@ const saveTrade = async () => {
   }
 
   const tradeData = {
-    date: selectedDateStr.value,
+    date: form.value.date, // 建倉日期
     ticker: form.value.ticker.toUpperCase(),
     strategy: form.value.strategy,
     expiry: form.value.expiry,
@@ -459,6 +483,7 @@ const saveTrade = async () => {
     contracts: form.value.contracts,
     entry_price: form.value.entryPrice,
     exit_price: totalExitPrice,
+    exit_date: form.value.exitDate ? form.value.exitDate : null, // 平倉日期
     status: isClosed ? 'closed' : 'open',
     pnl: Number(pnl.toFixed(2))
   };
@@ -477,6 +502,7 @@ const editTrade = (trade) => {
   isEditing.value = true;
   editingId.value = trade.id;
   form.value = {
+    date: trade.date,
     ticker: trade.ticker,
     strategy: trade.strategy,
     expiry: trade.expiry,
@@ -487,7 +513,8 @@ const editTrade = (trade) => {
     },
     contracts: trade.contracts,
     entryPrice: trade.entry_price,
-    exitPrice: trade.exit_price !== null ? trade.exit_price : ''
+    exitPrice: trade.exit_price !== null ? trade.exit_price : '',
+    exitDate: trade.exit_date || ''
   };
 };
 
@@ -503,6 +530,7 @@ const cancelEdit = () => {
   isEditing.value = false;
   editingId.value = null;
   form.value = JSON.parse(JSON.stringify(initialForm));
+  form.value.date = selectedDateStr.value; // 恢復為當前月曆選擇日
 };
 
 // ==========================================
@@ -524,7 +552,7 @@ const exportJSON = () => {
 
 const exportCSV = () => {
   if (allTrades.value.length === 0) return alert('目前沒有紀錄可以匯出！');
-  const headers = ['id', 'date', 'ticker', 'strategy', 'expiry', 'strikes', 'contracts', 'entry_price', 'exit_price', 'status', 'pnl'];
+  const headers = ['id', 'date', 'ticker', 'strategy', 'expiry', 'strikes', 'contracts', 'entry_price', 'exit_price', 'exit_date', 'status', 'pnl'];
   
   const rows = allTrades.value.map(t => {
     return headers.map(h => {
@@ -578,7 +606,7 @@ const handleImport = async (event) => {
 };
 
 // ==========================================
-// 📊 到期損益圖 (Payoff Diagram)
+// 到期損益圖 (Payoff Diagram)
 // ==========================================
 const isChartModalOpen = ref(false);
 const chartTradeData = ref(null);
