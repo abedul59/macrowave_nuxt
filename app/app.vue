@@ -52,6 +52,11 @@
             🇺🇸 選擇權籌碼
           </button>
         </li>
+        <li class="nav-item">
+          <button :class="['nav-link py-3 text-secondary text-darken', { active: activeTab === 'journal' }]" @click="activeTab = 'journal'">
+            📓 選擇權日誌
+          </button>
+        </li>
       </ul>
     </div>
 
@@ -77,6 +82,7 @@ import TabTmfRetailRatio from '../components/TabTmfRetailRatio.vue'
 import TabLeadIndicator from '../components/TabLeadIndicator.vue'
 import StockChart from '../components/StockChart.vue'
 import TabOptionsChain from '../components/TabOptionsChain.vue'
+import TabOptionsJournal from '../components/TabOptionsJournal.vue'
 
 // 全局引入 ECharts 套件
 useHead({ script: [{ src: 'https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js' }] })
@@ -96,6 +102,7 @@ const currentTabComponent = computed(() => {
     case 'lead': return TabLeadIndicator
     case 'usstock': return StockChart
     case 'options': return TabOptionsChain
+    case 'journal': return TabOptionsJournal
     default: return TabDashboard
   }
 })
