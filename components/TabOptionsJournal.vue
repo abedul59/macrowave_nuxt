@@ -54,16 +54,25 @@
             </div>
             <div class="trade-card-body">
               <div class="trade-detail">到期日: {{ trade.expiry }}</div>
+              
+              <!-- 顯示詳細履約價 -->
               <div class="trade-detail strikes-detail">
                 履約價: 
-                <span v-if="trade.strategy === 'vertical'" class="fw-bold text-white">
-                  S:{{ trade.strikes.short }}, L:{{ trade.strikes.long }}
+                <span v-if="trade.strategy === 'bullPut'" class="fw-bold text-white">
+                  Put (賣: {{ trade.strikes.shortPut }}, 買: {{ trade.strikes.longPut }})
+                </span>
+                <span v-if="trade.strategy === 'bearCall'" class="fw-bold text-white">
+                  Call (賣: {{ trade.strikes.shortCall }}, 買: {{ trade.strikes.longCall }})
                 </span>
                 <span v-if="trade.strategy === 'ironCondor'" class="fw-bold text-white">
-                  P(L:{{ trade.strikes.longPut }}, S:{{ trade.strikes.shortPut }}) / 
-                  C(S:{{ trade.strikes.shortCall }}, L:{{ trade.strikes.longCall }})
+                  P(買:{{ trade.strikes.longPut }}, 賣:{{ trade.strikes.shortPut }}) / 
+                  C(賣:{{ trade.strikes.shortCall }}, 買:{{ trade.strikes.longCall }})
+                </span>
+                <span v-if="trade.strategy === 'vertical'" class="fw-bold text-muted">
+                  舊版紀錄 (S:{{ trade.strikes.short }}, L:{{ trade.strikes.long }})
                 </span>
               </div>
+
               <div class="trade-detail">口數: {{ trade.contracts }}</div>
               <div class="trade-detail text-success" v-if="trade.entry_price !== null">
                 建倉收租 (Credit): ${{ Number(trade.entry_price).toFixed(2) }}
@@ -80,8 +89,7 @@
               </div>
             </div>
             <div class="trade-card-actions mt-3">
-              <!-- 🔥 白話文按鈕 -->
-              <button class="action-btn view-btn" @click="openPayoffChart(trade)">📊 預覽到期賺賠圖</button>
+              <button class="action-btn view-btn" @click="openPayoffChart(trade)">📊 預覽到期圖</button>
               <button class="action-btn edit-btn" @click="editTrade(trade)">編輯 / 平倉</button>
               <button class="action-btn delete-btn" @click="deleteTrade(trade.id)">刪除</button>
             </div>
@@ -101,11 +109,13 @@
             <input type="text" v-model="form.ticker" required placeholder="例: SPY" class="dark-input" />
           </div>
 
+          <!-- 🔥 策略選擇大更新 -->
           <div class="form-group">
             <label>策略類型</label>
             <select v-model="form.strategy" class="dark-input" @change="resetStrikes">
-              <option value="vertical">垂直價差 (Credit Vertical Spread)</option>
-              <option value="ironCondor">鐵鷹 (Iron Condor)</option>
+              <option value="bullPut">📉 賣權多頭 (Bull Put Spread) - 看漲/盤整</option>
+              <option value="bearCall">📈 買權空頭 (Bear Call Spread) - 看跌/盤整</option>
+              <option value="ironCondor">🦅 鐵鷹 (Iron Condor) - 區間盤整</option>
             </select>
           </div>
 
@@ -114,32 +124,46 @@
             <input type="date" v-model="form.expiry" required class="dark-input" />
           </div>
 
-          <div v-if="form.strategy === 'vertical'" class="strikes-grid">
+          <!-- 賣權多頭 (Bull Put) 履約價 -->
+          <div v-if="form.strategy === 'bullPut'" class="strikes-grid">
             <div class="form-group">
-              <label class="text-danger">賣出 (Short) 履約價</label>
-              <input type="number" step="0.5" v-model="form.strikes.short" required class="dark-input" />
-            </div>
-            <div class="form-group">
-              <label class="text-success">買入 (Long) 履約價</label>
-              <input type="number" step="0.5" v-model="form.strikes.long" required class="dark-input" />
-            </div>
-          </div>
-
-          <div v-if="form.strategy === 'ironCondor'" class="strikes-grid-4">
-            <div class="form-group">
-              <label class="text-success">買入 Put (Long)</label>
-              <input type="number" step="0.5" v-model="form.strikes.longPut" required class="dark-input" />
-            </div>
-            <div class="form-group">
-              <label class="text-danger">賣出 Put (Short)</label>
+              <label class="text-danger">賣出 (Short) Put 履約價</label>
               <input type="number" step="0.5" v-model="form.strikes.shortPut" required class="dark-input" />
             </div>
             <div class="form-group">
-              <label class="text-danger">賣出 Call (Short)</label>
+              <label class="text-success">買入 (Long) Put 履約價</label>
+              <input type="number" step="0.5" v-model="form.strikes.longPut" required class="dark-input" />
+            </div>
+          </div>
+
+          <!-- 買權空頭 (Bear Call) 履約價 -->
+          <div v-if="form.strategy === 'bearCall'" class="strikes-grid">
+            <div class="form-group">
+              <label class="text-danger">賣出 (Short) Call 履約價</label>
               <input type="number" step="0.5" v-model="form.strikes.shortCall" required class="dark-input" />
             </div>
             <div class="form-group">
-              <label class="text-success">買入 Call (Long)</label>
+              <label class="text-success">買入 (Long) Call 履約價</label>
+              <input type="number" step="0.5" v-model="form.strikes.longCall" required class="dark-input" />
+            </div>
+          </div>
+
+          <!-- 鐵鷹 (Iron Condor) 履約價 -->
+          <div v-if="form.strategy === 'ironCondor'" class="strikes-grid-4">
+            <div class="form-group">
+              <label class="text-success">買入 Put (保護)</label>
+              <input type="number" step="0.5" v-model="form.strikes.longPut" required class="dark-input" />
+            </div>
+            <div class="form-group">
+              <label class="text-danger">賣出 Put (收租)</label>
+              <input type="number" step="0.5" v-model="form.strikes.shortPut" required class="dark-input" />
+            </div>
+            <div class="form-group">
+              <label class="text-danger">賣出 Call (收租)</label>
+              <input type="number" step="0.5" v-model="form.strikes.shortCall" required class="dark-input" />
+            </div>
+            <div class="form-group">
+              <label class="text-success">買入 Call (保護)</label>
               <input type="number" step="0.5" v-model="form.strikes.longCall" required class="dark-input" />
             </div>
           </div>
@@ -162,6 +186,7 @@
             <input type="number" step="0.01" v-model="form.exitPrice" class="dark-input" placeholder="未平倉請留空" />
           </div>
 
+          <!-- 試算預覽面板 -->
           <div class="calc-preview mt-3" v-if="formStats">
             <h5 class="calc-title mb-3">💡 交易試算預覽</h5>
             <div class="d-flex justify-content-between mb-2">
@@ -193,7 +218,7 @@
       </div>
     </div>
 
-    <!-- 🔥 修正版：到期損益圖 Modal -->
+    <!-- 🔥 絕對不會失敗的到期損益圖 Modal -->
     <div v-if="isChartModalOpen" class="chart-modal-overlay" @click.self="closePayoffChart">
       <div class="chart-modal-content">
         <div class="chart-modal-header border-bottom border-secondary pb-3 mb-3 d-flex justify-content-between align-items-center">
@@ -249,21 +274,19 @@ const fetchTrades = async () => {
   if (!error) allTrades.value = data || [];
 };
 
-onMounted(() => {
-  fetchTrades();
-});
+onMounted(() => { fetchTrades(); });
 
-const dailyTrades = computed(() => {
-  return allTrades.value.filter(t => t.date === selectedDateStr.value);
-});
-
+const dailyTrades = computed(() => { return allTrades.value.filter(t => t.date === selectedDateStr.value); });
 const hasTradeOnDate = (day) => {
   const checkDate = `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   return allTrades.value.some(t => t.date === checkDate);
 };
 
 const getStrategyName = (val) => {
-  return val === 'vertical' ? '垂直價差' : '鐵鷹';
+  if (val === 'bullPut') return '賣權多頭 (Bull Put)';
+  if (val === 'bearCall') return '買權空頭 (Bear Call)';
+  if (val === 'ironCondor') return '鐵鷹 (Iron Condor)';
+  return '垂直價差 (舊版)';
 };
 
 const isEditing = ref(false);
@@ -271,9 +294,9 @@ const editingId = ref(null);
 
 const initialForm = {
   ticker: '',
-  strategy: 'vertical',
+  strategy: 'bullPut', // 預設改為賣權多頭
   expiry: '',
-  strikes: { short: null, long: null, longPut: null, shortPut: null, shortCall: null, longCall: null },
+  strikes: { shortPut: null, longPut: null, shortCall: null, longCall: null },
   contracts: 1,
   entryPrice: null,
   exitPrice: null
@@ -281,7 +304,7 @@ const initialForm = {
 const form = ref(JSON.parse(JSON.stringify(initialForm)));
 
 const resetStrikes = () => {
-  form.value.strikes = { short: null, long: null, longPut: null, shortPut: null, shortCall: null, longCall: null };
+  form.value.strikes = { shortPut: null, longPut: null, shortCall: null, longCall: null };
 };
 
 const formStats = computed(() => {
@@ -289,9 +312,12 @@ const formStats = computed(() => {
   if (!c.entryPrice || !c.contracts) return null;
 
   let width = 0;
-  if (c.strategy === 'vertical') {
-    if (!c.strikes.short || !c.strikes.long) return null;
-    width = Math.abs(c.strikes.short - c.strikes.long);
+  if (c.strategy === 'bullPut') {
+    if (!c.strikes.shortPut || !c.strikes.longPut) return null;
+    width = Math.abs(c.strikes.shortPut - c.strikes.longPut);
+  } else if (c.strategy === 'bearCall') {
+    if (!c.strikes.shortCall || !c.strikes.longCall) return null;
+    width = Math.abs(c.strikes.longCall - c.strikes.shortCall);
   } else if (c.strategy === 'ironCondor') {
     if (!c.strikes.longPut || !c.strikes.shortPut || !c.strikes.shortCall || !c.strikes.longCall) return null;
     const putWidth = Math.abs(c.strikes.shortPut - c.strikes.longPut);
@@ -371,7 +397,7 @@ const cancelEdit = () => {
 };
 
 // ==========================================
-// 🔥 徹底修復且更好懂的到期損益圖
+// 🔥 絕對穩定的到期損益圖 (ECharts Foolproof 版)
 // ==========================================
 const isChartModalOpen = ref(false);
 const chartTradeData = ref(null);
@@ -402,45 +428,58 @@ const renderPayoffChart = (trade) => {
   
   let minStrike = Infinity, maxStrike = -Infinity;
 
-  if (strategy === 'vertical') {
+  if (strategy === 'bullPut') {
+    minStrike = strikes.longPut;
+    maxStrike = strikes.shortPut;
+  } else if (strategy === 'bearCall') {
+    minStrike = strikes.shortCall;
+    maxStrike = strikes.longCall;
+  } else if (strategy === 'ironCondor') {
+    minStrike = strikes.longPut;
+    maxStrike = strikes.longCall;
+  } else if (strategy === 'vertical') { // 舊版相容
     minStrike = Math.min(strikes.short, strikes.long);
     maxStrike = Math.max(strikes.short, strikes.long);
-  } else {
-    minStrike = Math.min(strikes.longPut, strikes.shortPut, strikes.shortCall, strikes.longCall);
-    maxStrike = Math.max(strikes.longPut, strikes.shortPut, strikes.shortCall, strikes.longCall);
   }
 
-  // 產生 [x, y] 的二維數據陣列 (這是確保連續折線圖畫得出來的唯一正解)
-  const chartData = [];
+  // 產出單純的 X (字串) 與 Y (數值) 陣列，不使用任何會導致線條消失的視覺映射
+  const xData = [];
+  const yData = [];
   
-  const startPrice = minStrike * 0.90; // 往左延伸 10%
-  const endPrice = maxStrike * 1.10;   // 往右延伸 10%
-  const step = (endPrice - startPrice) / 200; // 切 200 個點來畫線
+  const startPrice = minStrike * 0.90; 
+  const endPrice = maxStrike * 1.10;   
+  const step = (endPrice - startPrice) / 100; // 切 100 個點
 
   for (let p = startPrice; p <= endPrice; p += step) {
     let pnl = 0;
-    if (strategy === 'vertical') {
-      const isCallSpread = strikes.short < strikes.long;
-      if (isCallSpread) {
-        pnl = (entry_price - Math.max(p - strikes.short, 0) + Math.max(p - strikes.long, 0)) * multiplier;
-      } else {
-        pnl = (entry_price - Math.max(strikes.short - p, 0) + Math.max(strikes.long - p, 0)) * multiplier;
-      }
+    
+    if (strategy === 'bullPut') {
+      pnl = (entry_price - Math.max(strikes.shortPut - p, 0) + Math.max(strikes.longPut - p, 0)) * multiplier;
+    } else if (strategy === 'bearCall') {
+      pnl = (entry_price - Math.max(p - strikes.shortCall, 0) + Math.max(p - strikes.longCall, 0)) * multiplier;
     } else if (strategy === 'ironCondor') {
       pnl = (entry_price 
              - Math.max(strikes.shortPut - p, 0) 
              + Math.max(strikes.longPut - p, 0) 
              - Math.max(p - strikes.shortCall, 0) 
              + Math.max(p - strikes.longCall, 0)) * multiplier;
+    } else if (strategy === 'vertical') { // 舊版相容
+      const isCallSpread = strikes.short < strikes.long;
+      if (isCallSpread) {
+        pnl = (entry_price - Math.max(p - strikes.short, 0) + Math.max(p - strikes.long, 0)) * multiplier;
+      } else {
+        pnl = (entry_price - Math.max(strikes.short - p, 0) + Math.max(strikes.long - p, 0)) * multiplier;
+      }
     }
     
-    chartData.push([Number(p.toFixed(2)), Number(pnl.toFixed(2))]);
+    xData.push(p.toFixed(2));
+    yData.push(Number(pnl.toFixed(2)));
   }
 
   const option = {
     backgroundColor: '#1e222d',
     title: {
-      text: '🟩 綠色 = 到期能賺錢的股價區間   │   🟥 紅色 = 到期會賠錢的股價區間',
+      text: '背景 🟩 亮綠色 = 獲利區間   │   背景 🟥 淡紅色 = 虧損區間',
       left: 'center',
       top: 10,
       textStyle: { color: '#b2b5be', fontSize: 13, fontWeight: 'normal' }
@@ -449,55 +488,54 @@ const renderPayoffChart = (trade) => {
       trigger: 'axis',
       axisPointer: { type: 'cross' },
       formatter: (params) => {
-        // 白話文 Tooltip
-        const price = params[0].value[0];
-        const pnl = params[0].value[1];
-        const isWin = pnl >= 0;
-        const color = isWin ? '#26a69a' : '#ef5350';
-        const status = isWin ? '獲利' : '虧損';
-        return `如果到期時股價為: <b>$${price.toFixed(2)}</b><br/>這筆交易將會: <span style="color:${color};font-weight:bold;font-size:16px;">${status} $${Math.abs(pnl).toFixed(2)}</span>`;
+        const price = params[0].name;
+        const pnl = Number(params[0].value);
+        const color = pnl >= 0 ? '#26a69a' : '#ef5350';
+        const status = pnl >= 0 ? '獲利' : '虧損';
+        return `如果到期時股價為: <b>$${price}</b><br/>這筆交易將會: <span style="color:${color};font-weight:bold;font-size:16px;">${status} $${Math.abs(pnl).toFixed(2)}</span>`;
       }
     },
     xAxis: {
-      type: 'value',
+      type: 'category', // 最穩定的類別軸
       name: '到期時的股票價格',
       nameLocation: 'middle',
       nameGap: 30,
-      nameTextStyle: { color: '#d1d4dc', fontSize: 14 },
-      min: 'dataMin', 
-      max: 'dataMax',
+      data: xData,
       axisLine: { lineStyle: { color: '#8c8f98' } },
-      splitLine: { show: false }
+      axisLabel: {
+        formatter: (value, index) => {
+          return index % 10 === 0 ? value : ''; // 避免標籤擠在一起
+        }
+      }
     },
     yAxis: {
       type: 'value',
       name: '您的總賺賠 (USD)',
-      nameTextStyle: { color: '#d1d4dc', fontSize: 14 },
       axisLine: { lineStyle: { color: '#8c8f98' } },
       splitLine: { lineStyle: { color: '#2b2b43' } }
     },
-    // 🔥 利用 visualMap 正確為線條與面積上色
-    visualMap: {
-      show: false,
-      dimension: 1, // 根據 Y 軸資料判斷
-      pieces: [
-        { min: 0, color: '#26a69a' }, // 大於等於 0 為綠色
-        { max: 0, color: '#ef5350' }  // 小於 0 為紅色
-      ]
-    },
     series: [
       {
-        data: chartData,
+        data: yData,
         type: 'line',
         symbol: 'none',
+        itemStyle: { color: '#e0ac00' }, // 🔥 粗體黃金折線，保證絕對顯示！
         lineStyle: { width: 4 },
-        areaStyle: { opacity: 0.2 }, // 填充顏色，讓獲利/虧損區間一目了然
+        markArea: {
+          silent: true,
+          data: [
+            // Y 軸大於 0 的背景塗綠色
+            [ { yAxis: 0, itemStyle: { color: 'rgba(38, 166, 154, 0.15)' } }, { yAxis: 'max' } ],
+            // Y 軸小於 0 的背景塗紅色
+            [ { yAxis: 'min', itemStyle: { color: 'rgba(239, 83, 80, 0.15)' } }, { yAxis: 0 } ]
+          ]
+        },
         markLine: {
           silent: true,
           symbol: 'none',
           label: { position: 'end', formatter: '{b}', color: '#fff' },
           data: [
-            { yAxis: 0, lineStyle: { color: '#8c8f98', type: 'solid', width: 2 }, name: '不賺不賠線 (0元)' }
+            { yAxis: 0, lineStyle: { color: '#d1d4dc', type: 'solid', width: 2 }, name: '不賺不賠線 (0元)' }
           ]
         },
         markPoint: {
@@ -530,7 +568,6 @@ const renderPayoffChart = (trade) => {
 }
 @media (max-width: 992px) { .journal-layout { grid-template-columns: 1fr; } }
 
-/* 月曆區塊 */
 .calendar-section { background-color: #1e222d; padding: 20px; border-radius: 8px; border: 1px solid #2b2b43; }
 .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .current-month { color: #fff; font-size: 1.2rem; margin: 0; }
@@ -551,7 +588,6 @@ const renderPayoffChart = (trade) => {
 .trade-dots { display: flex; gap: 4px; margin-top: 4px; }
 .dot { width: 6px; height: 6px; background-color: #e0ac00; border-radius: 50%; }
 
-/* 列表區塊 */
 .trade-card { background-color: #2a2e39; border-left: 4px solid #8c8f98; padding: 16px; border-radius: 6px; margin-bottom: 12px; }
 .trade-card.open { border-color: #e0ac00; }
 .trade-card.win { border-color: #26a69a; }
@@ -559,7 +595,7 @@ const renderPayoffChart = (trade) => {
 .trade-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .strategy-badge { background-color: #1e222d; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; color: #8c8f98; }
 .trade-detail { font-size: 0.95rem; color: #b2b5be; margin-bottom: 6px; }
-.strikes-detail { background-color: #131722; padding: 8px; border-radius: 4px; margin: 8px 0; }
+.strikes-detail { background-color: #131722; padding: 8px; border-radius: 4px; margin: 8px 0; border-left: 3px solid #2962ff; }
 .trade-card-actions { display: flex; gap: 8px; }
 .action-btn { flex: 1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
 .action-btn:hover { opacity: 0.8; }
@@ -567,7 +603,6 @@ const renderPayoffChart = (trade) => {
 .edit-btn { background-color: #2962ff; color: #fff; }
 .delete-btn { background-color: rgba(239, 83, 80, 0.2); color: #ef5350; }
 
-/* 表單區塊 */
 .form-section { background-color: #1e222d; padding: 20px; border-radius: 8px; border: 1px solid #2b2b43; }
 .form-group { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
 .form-group label { font-size: 0.9rem; color: #8c8f98; }
@@ -576,7 +611,6 @@ const renderPayoffChart = (trade) => {
 .strikes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .strikes-grid-4 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-/* 試算面板樣式 */
 .calc-preview { background-color: #131722; border: 1px dashed #434651; padding: 16px; border-radius: 8px; }
 .calc-title { color: #e0ac00; margin-top: 0; }
 .fs-7 { font-size: 0.8rem; }
