@@ -59,7 +59,6 @@
               <span class="strategy-badge">{{ getStrategyName(trade.strategy) }}</span>
             </div>
             <div class="trade-card-body">
-              <!-- 🔥 日期顯示大更新 -->
               <div class="trade-detail d-flex gap-3 mb-2">
                 <span class="text-success">🟢 建倉: {{ trade.date }}</span>
                 <span class="text-danger" v-if="trade.exit_date">🔴 平倉: {{ trade.exit_date }}</span>
@@ -88,14 +87,31 @@
                 建倉總收租 (Credit): ${{ Number(trade.entry_price).toFixed(2) }}
               </div>
               
-              <!-- 鐵鷹雙邊平倉顯示 -->
+              <!-- 🔥 新增：每口最大損益標示面板 -->
+              <div class="risk-box mt-2 mb-2" v-if="trade.entry_price !== null">
+                <div class="d-flex justify-content-between mb-1 text-success fs-7">
+                  <span>✅ 最大收益 (總計 / 每口):</span>
+                  <span class="fw-bold">
+                    ${{ getTradeStats(trade).maxProfit.toFixed(2) }} 
+                    <span class="text-muted opacity-75">(${{ getTradeStats(trade).perContractProfit.toFixed(2) }})</span>
+                  </span>
+                </div>
+                <div class="d-flex justify-content-between text-danger fs-7">
+                  <span>❌ 最大虧損 (總計 / 每口):</span>
+                  <span class="fw-bold">
+                    ${{ getTradeStats(trade).maxLoss.toFixed(2) }} 
+                    <span class="text-muted opacity-75">(${{ getTradeStats(trade).perContractLoss.toFixed(2) }})</span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- 平倉支出顯示 -->
               <div class="trade-detail text-warning" v-if="trade.strategy === 'ironCondor' && (trade.strikes.exitPut !== null || trade.strikes.exitCall !== null)">
                 平倉支出 (Debit): 
                 <span v-if="trade.strikes.exitPut !== null">Put端 ${{ Number(trade.strikes.exitPut).toFixed(2) }}</span>
                 <span v-if="trade.strikes.exitPut !== null && trade.strikes.exitCall !== null"> | </span>
                 <span v-if="trade.strikes.exitCall !== null">Call端 ${{ Number(trade.strikes.exitCall).toFixed(2) }}</span>
               </div>
-              <!-- 單邊策略平倉顯示 -->
               <div class="trade-detail text-warning" v-else-if="trade.strategy !== 'ironCondor' && trade.exit_price !== null">
                 平倉成本 (Debit): ${{ Number(trade.exit_price).toFixed(2) }}
               </div>
@@ -128,7 +144,6 @@
               <label>股票代號 (Ticker)</label>
               <input type="text" v-model="form.ticker" required placeholder="例: SPY" class="dark-input" />
             </div>
-            <!-- 🔥 新增建倉日期欄位 -->
             <div class="form-group flex-fill mb-0">
               <label>建倉日期 (Open Date)</label>
               <input type="date" v-model="form.date" required class="dark-input" />
@@ -149,7 +164,6 @@
             <input type="date" v-model="form.expiry" required class="dark-input" />
           </div>
 
-          <!-- 履約價設定區 -->
           <div v-if="form.strategy === 'bullPut'" class="strikes-grid">
             <div class="form-group">
               <label class="text-danger">賣出 (Short) Put</label>
@@ -201,23 +215,19 @@
             <input type="number" step="0.01" v-model.number="form.entryPrice" required class="dark-input" />
           </div>
 
-          <!-- 動態平倉區塊 -->
           <div class="border-top border-secondary pt-3 mt-2">
             <h5 class="text-warning mb-3">🚪 平倉紀錄區 (未平倉請留空)</h5>
             
-            <!-- 🔥 新增平倉日期欄位 -->
             <div class="form-group">
               <label class="text-warning">平倉日期 (Close Date)</label>
               <input type="date" v-model="form.exitDate" class="dark-input" />
             </div>
 
-            <!-- 單邊策略的單一平倉輸入 -->
             <div class="form-group" v-if="form.strategy !== 'ironCondor'">
               <label class="text-warning">平倉支出成本 (Exit Debit)</label>
               <input type="number" step="0.01" v-model.number="form.exitPrice" class="dark-input" placeholder="若到期歸零請填 0" />
             </div>
 
-            <!-- 鐵鷹策略的雙邊平倉輸入 -->
             <div class="strikes-grid" v-if="form.strategy === 'ironCondor'">
               <div class="form-group">
                 <label class="text-warning">Put 邊平倉支出 (Debit)</label>
@@ -234,12 +244,18 @@
           <div class="calc-preview mt-3" v-if="formStats">
             <h5 class="calc-title mb-3">💡 交易試算預覽</h5>
             <div class="d-flex justify-content-between mb-2">
-              <span class="text-muted">到期最多能賺 (Max Profit):</span>
-              <span class="text-success fw-bold">${{ formStats.maxProfit.toFixed(2) }}</span>
+              <span class="text-muted">到期最大收益 (總計 / 每口):</span>
+              <span class="text-success fw-bold">
+                ${{ formStats.maxProfit.toFixed(2) }} 
+                <span class="fs-7 text-muted">(${{ formStats.perContractProfit.toFixed(2) }})</span>
+              </span>
             </div>
             <div class="d-flex justify-content-between mb-2">
-              <span class="text-muted">到期最多會賠 (Max Loss):</span>
-              <span class="text-danger fw-bold">${{ formStats.maxLoss.toFixed(2) }}</span>
+              <span class="text-muted">到期最大虧損 (總計 / 每口):</span>
+              <span class="text-danger fw-bold">
+                ${{ formStats.maxLoss.toFixed(2) }} 
+                <span class="fs-7 text-muted">(${{ formStats.perContractLoss.toFixed(2) }})</span>
+              </span>
             </div>
             
             <div v-if="formStats.exitDetails" class="pt-2 mt-2 border-top border-secondary">
@@ -259,7 +275,6 @@
                   <span>-${{ (form.strikes.exitCall * 100 * form.contracts).toFixed(2) }}</span>
                 </div>
               </template>
-              
               <template v-else>
                 <div class="d-flex justify-content-between fs-7 mb-1 text-danger">
                   <span>➖ 平倉總支出:</span>
@@ -288,7 +303,6 @@
       </div>
     </div>
 
-    <!-- 到期損益圖 Modal -->
     <div v-if="isChartModalOpen" class="chart-modal-overlay" @click.self="closePayoffChart">
       <div class="chart-modal-content">
         <div class="chart-modal-header border-bottom border-secondary pb-3 mb-3 d-flex justify-content-between align-items-center">
@@ -300,7 +314,6 @@
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -346,7 +359,6 @@ const fetchTrades = async () => {
 
 onMounted(() => { fetchTrades(); });
 
-// 以建倉日期 (trade.date) 來決定顯示在哪一天
 const dailyTrades = computed(() => { return allTrades.value.filter(t => t.date === selectedDateStr.value); });
 const hasTradeOnDate = (day) => {
   const checkDate = `${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -364,7 +376,7 @@ const isEditing = ref(false);
 const editingId = ref(null);
 
 const initialForm = {
-  date: '', // 建倉日期
+  date: '',
   ticker: '',
   strategy: 'bullPut',
   expiry: '',
@@ -372,15 +384,12 @@ const initialForm = {
   contracts: 1,
   entryPrice: null,
   exitPrice: null,
-  exitDate: '' // 平倉日期
+  exitDate: ''
 };
 const form = ref(JSON.parse(JSON.stringify(initialForm)));
 
-// 當月曆選擇日期改變時，如果是新增模式，連動更新表單的建倉日期
 watch(selectedDateStr, (newVal) => {
-  if (!isEditing.value) {
-    form.value.date = newVal;
-  }
+  if (!isEditing.value) form.value.date = newVal;
 }, { immediate: true });
 
 const resetStrikes = () => {
@@ -409,6 +418,29 @@ const getSafeStrikes = (strategy, strikes) => {
   return { sP, lP, sC, lC, s, l };
 };
 
+// 🔥 計算已存檔交易紀錄的最大損益 (用於卡片顯示)
+const getTradeStats = (trade) => {
+  if (trade.entry_price === null) return { maxProfit: 0, maxLoss: 0, perContractProfit: 0, perContractLoss: 0 };
+  
+  const { sP, lP, sC, lC, s, l } = getSafeStrikes(trade.strategy, trade.strikes);
+  let width = 0;
+
+  if (trade.strategy === 'bullPut') width = sP - lP;
+  else if (trade.strategy === 'bearCall') width = lC - sC;
+  else if (trade.strategy === 'ironCondor') width = Math.max(sP - lP, lC - sC);
+  else if (trade.strategy === 'vertical') width = Math.abs(s - l);
+
+  const perContractProfit = trade.entry_price * 100;
+  const perContractLoss = Math.max(0, width - trade.entry_price) * 100;
+  
+  return {
+    maxProfit: perContractProfit * trade.contracts,
+    maxLoss: perContractLoss * trade.contracts,
+    perContractProfit,
+    perContractLoss
+  };
+};
+
 const formStats = computed(() => {
   const c = form.value;
   if (!c.entryPrice || !c.contracts) return null;
@@ -421,8 +453,11 @@ const formStats = computed(() => {
   else if (c.strategy === 'ironCondor') width = Math.max(sP - lP, lC - sC);
   else if (c.strategy === 'vertical') width = Math.abs(s - l);
 
-  const maxProfit = c.entryPrice * 100 * c.contracts;
-  const maxLoss = (width - c.entryPrice) * 100 * c.contracts;
+  const perContractProfit = c.entryPrice * 100;
+  const perContractLoss = Math.max(0, width - c.entryPrice) * 100;
+  
+  const maxProfit = perContractProfit * c.contracts;
+  const maxLoss = perContractLoss * c.contracts;
   
   let exitDetails = null;
 
@@ -448,9 +483,10 @@ const formStats = computed(() => {
     }
   }
 
-  if (maxLoss < 0 && width !== 0) return null; 
+  // 防止虧損算出負數 (防呆)
+  if (width > 0 && width < c.entryPrice) return null; 
 
-  return { width, maxProfit, maxLoss: -maxLoss, exitDetails };
+  return { width, maxProfit, maxLoss, perContractProfit, perContractLoss, exitDetails };
 });
 
 const saveTrade = async () => {
@@ -475,7 +511,7 @@ const saveTrade = async () => {
   }
 
   const tradeData = {
-    date: form.value.date, // 建倉日期
+    date: form.value.date, 
     ticker: form.value.ticker.toUpperCase(),
     strategy: form.value.strategy,
     expiry: form.value.expiry,
@@ -483,7 +519,7 @@ const saveTrade = async () => {
     contracts: form.value.contracts,
     entry_price: form.value.entryPrice,
     exit_price: totalExitPrice,
-    exit_date: form.value.exitDate ? form.value.exitDate : null, // 平倉日期
+    exit_date: form.value.exitDate ? form.value.exitDate : null, 
     status: isClosed ? 'closed' : 'open',
     pnl: Number(pnl.toFixed(2))
   };
@@ -530,7 +566,7 @@ const cancelEdit = () => {
   isEditing.value = false;
   editingId.value = null;
   form.value = JSON.parse(JSON.stringify(initialForm));
-  form.value.date = selectedDateStr.value; // 恢復為當前月曆選擇日
+  form.value.date = selectedDateStr.value; 
 };
 
 // ==========================================
@@ -606,7 +642,7 @@ const handleImport = async (event) => {
 };
 
 // ==========================================
-// 到期損益圖 (Payoff Diagram)
+// 📊 到期損益圖 (Payoff Diagram)
 // ==========================================
 const isChartModalOpen = ref(false);
 const chartTradeData = ref(null);
@@ -807,6 +843,9 @@ const renderPayoffChart = (trade) => {
 .strategy-badge { background-color: #1e222d; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; color: #8c8f98; }
 .trade-detail { font-size: 0.95rem; color: #b2b5be; margin-bottom: 6px; }
 .strikes-detail { background-color: #131722; padding: 8px; border-radius: 4px; margin: 8px 0; border-left: 3px solid #2962ff; }
+/* 🔥 風險面板樣式 */
+.risk-box { background: rgba(0,0,0,0.25); padding: 10px; border-radius: 4px; border: 1px solid #434651; }
+.fs-7 { font-size: 0.8rem; }
 .trade-card-actions { display: flex; gap: 8px; }
 .action-btn { flex: 1; border: none; padding: 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
 .action-btn:hover { opacity: 0.8; }
@@ -824,7 +863,6 @@ const renderPayoffChart = (trade) => {
 
 .calc-preview { background-color: #131722; border: 1px dashed #434651; padding: 16px; border-radius: 8px; }
 .calc-title { color: #e0ac00; margin-top: 0; }
-.fs-7 { font-size: 0.8rem; }
 
 .submit-btn { background-color: #2962ff; color: #fff; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .submit-btn:hover { background-color: #1e4bd8; }
