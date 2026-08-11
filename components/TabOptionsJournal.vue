@@ -17,10 +17,8 @@
           <div class="weekday">日</div><div class="weekday">一</div><div class="weekday">二</div>
           <div class="weekday">三</div><div class="weekday">四</div><div class="weekday">五</div><div class="weekday">六</div>
           
-          <!-- 空白填充 -->
           <div v-for="blank in firstDayOffset" :key="'blank-' + blank" class="calendar-day empty"></div>
           
-          <!-- 日期格子 -->
           <div 
             v-for="day in daysInMonth" 
             :key="'day-' + day" 
@@ -39,7 +37,6 @@
           </div>
         </div>
 
-        <!-- 該日交易紀錄列表 -->
         <div class="daily-trades-list mt-4">
           <h4 class="text-white mb-3">📅 {{ selectedDateStr }} 交易紀錄</h4>
           <div v-if="dailyTrades.length === 0" class="text-muted text-center p-3">
@@ -68,7 +65,6 @@
                 </span>
               </div>
               <div class="trade-detail">口數: {{ trade.contracts }}</div>
-              <!-- 注意：資料庫欄位為 snake_case (entry_price) -->
               <div class="trade-detail text-success" v-if="trade.entry_price !== null">
                 收租 (Credit): ${{ Number(trade.entry_price).toFixed(2) }}
               </div>
@@ -80,7 +76,9 @@
               </div>
             </div>
             <div class="trade-card-actions mt-3">
-              <button class="action-btn edit-btn" @click="editTrade(trade)">編輯 / 平倉</button>
+              <!-- 🔥 新增：看圖按鈕 -->
+              <button class="action-btn view-btn" @click="openPayoffChart(trade)">📊 損益圖</button>
+              <button class="action-btn edit-btn" @click="editTrade(trade)">編輯</button>
               <button class="action-btn delete-btn" @click="deleteTrade(trade.id)">刪除</button>
             </div>
           </div>
@@ -112,7 +110,6 @@
             <input type="date" v-model="form.expiry" required class="dark-input" />
           </div>
 
-          <!-- 垂直價差履約價 -->
           <div v-if="form.strategy === 'vertical'" class="strikes-grid">
             <div class="form-group">
               <label class="text-danger">賣出 (Short) 履約價</label>
@@ -124,22 +121,21 @@
             </div>
           </div>
 
-          <!-- 鐵鷹履約價 -->
           <div v-if="form.strategy === 'ironCondor'" class="strikes-grid-4">
             <div class="form-group">
-              <label class="text-success">買入 Put</label>
+              <label class="text-success">買入 Put (Long)</label>
               <input type="number" step="0.5" v-model="form.strikes.longPut" required class="dark-input" />
             </div>
             <div class="form-group">
-              <label class="text-danger">賣出 Put</label>
+              <label class="text-danger">賣出 Put (Short)</label>
               <input type="number" step="0.5" v-model="form.strikes.shortPut" required class="dark-input" />
             </div>
             <div class="form-group">
-              <label class="text-danger">賣出 Call</label>
+              <label class="text-danger">賣出 Call (Short)</label>
               <input type="number" step="0.5" v-model="form.strikes.shortCall" required class="dark-input" />
             </div>
             <div class="form-group">
-              <label class="text-success">買入 Call</label>
+              <label class="text-success">買入 Call (Long)</label>
               <input type="number" step="0.5" v-model="form.strikes.longCall" required class="dark-input" />
             </div>
           </div>
@@ -155,7 +151,7 @@
           </div>
 
           <div class="form-group border-top border-secondary pt-3 mt-2">
-            <label class="text-warning">平倉成本 (Exit Debit / 點數) - 可留空表示未平倉</label>
+            <label class="text-warning">平倉成本 (Exit Debit / 點數) - 可留空</label>
             <input type="number" step="0.01" v-model="form.exitPrice" class="dark-input" />
           </div>
 
@@ -170,15 +166,28 @@
         </form>
       </div>
     </div>
+
+    <!-- 🔥 新增：到期損益圖 Modal -->
+    <div v-if="isChartModalOpen" class="chart-modal-overlay" @click.self="closePayoffChart">
+      <div class="chart-modal-content">
+        <div class="chart-modal-header border-bottom border-secondary pb-3 mb-3 d-flex justify-content-between align-items-center">
+          <h4 class="m-0 fw-bold text-white">📊 {{ chartTradeData?.ticker }} 到期損益圖 (Payoff Diagram)</h4>
+          <button class="close-btn" @click="closePayoffChart">✖</button>
+        </div>
+        <div class="chart-modal-body">
+          <div id="payoff-chart" style="width: 100%; height: 450px;"></div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-// 匯入 Nuxt 3 的 Supabase 客戶端
+import { ref, computed, onMounted, nextTick } from 'vue';
+import * as echarts from 'echarts';
 const supabase = useSupabaseClient();
 
-// --- 日曆狀態 ---
 const date = new Date();
 const currentYear = ref(date.getFullYear());
 const currentMonth = ref(date.getMonth());
@@ -206,21 +215,11 @@ const isToday = (day) => {
   return day === today.getDate() && currentMonth.value === today.getMonth() && currentYear.value === today.getFullYear();
 };
 
-// --- 交易紀錄狀態 (改為串接 Supabase) ---
 const allTrades = ref([]);
 
-// 非同步抓取資料庫紀錄
 const fetchTrades = async () => {
-  const { data, error } = await supabase
-    .from('options_journal')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('抓取資料庫失敗:', error);
-  } else {
-    allTrades.value = data || [];
-  }
+  const { data, error } = await supabase.from('options_journal').select('*').order('created_at', { ascending: false });
+  if (!error) allTrades.value = data || [];
 };
 
 onMounted(() => {
@@ -240,7 +239,6 @@ const getStrategyName = (val) => {
   return val === 'vertical' ? '垂直價差' : '鐵鷹';
 };
 
-// --- 表單狀態 ---
 const isEditing = ref(false);
 const editingId = ref(null);
 
@@ -259,20 +257,18 @@ const resetStrikes = () => {
   form.value.strikes = { short: null, long: null, longPut: null, shortPut: null, shortCall: null, longCall: null };
 };
 
-// 新增與更新資料庫
 const saveTrade = async () => {
   const tradeData = {
     date: selectedDateStr.value,
     ticker: form.value.ticker.toUpperCase(),
     strategy: form.value.strategy,
     expiry: form.value.expiry,
-    strikes: form.value.strikes, // Supabase 會自動轉為 JSONB
+    strikes: form.value.strikes, 
     contracts: form.value.contracts,
     entry_price: form.value.entryPrice,
     exit_price: form.value.exitPrice !== '' && form.value.exitPrice !== null ? form.value.exitPrice : null,
   };
 
-  // 結算狀態與損益計算: (收租 - 平倉) * 100 * 口數
   if (tradeData.exit_price !== null) {
     tradeData.status = 'closed';
     tradeData.pnl = ((tradeData.entry_price - tradeData.exit_price) * 100 * tradeData.contracts).toFixed(2);
@@ -282,30 +278,18 @@ const saveTrade = async () => {
   }
 
   if (isEditing.value) {
-    // 更新既有紀錄
-    const { error } = await supabase
-      .from('options_journal')
-      .update(tradeData)
-      .eq('id', editingId.value);
-      
-    if (error) console.error('更新失敗:', error);
+    await supabase.from('options_journal').update(tradeData).eq('id', editingId.value);
   } else {
-    // 新增紀錄
-    const { error } = await supabase
-      .from('options_journal')
-      .insert([tradeData]);
-      
-    if (error) console.error('新增失敗:', error);
+    await supabase.from('options_journal').insert([tradeData]);
   }
 
-  await fetchTrades(); // 操作完成後重新抓取最新資料
+  await fetchTrades();
   cancelEdit();
 };
 
 const editTrade = (trade) => {
   isEditing.value = true;
   editingId.value = trade.id;
-  // 將資料庫的 snake_case 轉換回表單的 camelCase
   form.value = {
     ticker: trade.ticker,
     strategy: trade.strategy,
@@ -317,20 +301,11 @@ const editTrade = (trade) => {
   };
 };
 
-// 從資料庫刪除
 const deleteTrade = async (id) => {
   if (confirm('確定要刪除這筆交易紀錄嗎？')) {
-    const { error } = await supabase
-      .from('options_journal')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('刪除失敗:', error);
-    } else {
-      await fetchTrades();
-      if (isEditing.value && editingId.value === id) cancelEdit();
-    }
+    await supabase.from('options_journal').delete().eq('id', id);
+    await fetchTrades();
+    if (isEditing.value && editingId.value === id) cancelEdit();
   }
 };
 
@@ -338,6 +313,146 @@ const cancelEdit = () => {
   isEditing.value = false;
   editingId.value = null;
   form.value = JSON.parse(JSON.stringify(initialForm));
+};
+
+// ==========================================
+// 🔥 新增：到期損益圖 (Payoff Diagram) 邏輯
+// ==========================================
+const isChartModalOpen = ref(false);
+const chartTradeData = ref(null);
+let payoffChartInstance = null;
+
+const openPayoffChart = async (trade) => {
+  chartTradeData.value = trade;
+  isChartModalOpen.value = true;
+  
+  await nextTick();
+  renderPayoffChart(trade);
+};
+
+const closePayoffChart = () => {
+  isChartModalOpen.value = false;
+  if (payoffChartInstance) {
+    payoffChartInstance.dispose();
+    payoffChartInstance = null;
+  }
+};
+
+const renderPayoffChart = (trade) => {
+  const chartDom = document.getElementById('payoff-chart');
+  if (!chartDom) return;
+  
+  payoffChartInstance = echarts.init(chartDom);
+  
+  const { strategy, strikes, entry_price, contracts } = trade;
+  const multiplier = 100 * contracts;
+  
+  let minStrike = Infinity;
+  let maxStrike = -Infinity;
+
+  if (strategy === 'vertical') {
+    minStrike = Math.min(strikes.short, strikes.long);
+    maxStrike = Math.max(strikes.short, strikes.long);
+  } else {
+    minStrike = strikes.longPut;
+    maxStrike = strikes.longCall;
+  }
+
+  // 產生 X 軸的價格點 (稍微擴展最低與最高履約價的範圍)
+  const xData = [];
+  const yData = [];
+  const startPrice = minStrike * 0.85;
+  const endPrice = maxStrike * 1.15;
+  const step = (endPrice - startPrice) / 200;
+
+  for (let p = startPrice; p <= endPrice; p += step) {
+    xData.push(p.toFixed(2));
+    let pnl = 0;
+
+    if (strategy === 'vertical') {
+      const isCallSpread = strikes.short < strikes.long;
+      if (isCallSpread) {
+        // Bear Call Spread
+        const shortLeg = -Math.max(p - strikes.short, 0);
+        const longLeg = Math.max(p - strikes.long, 0);
+        pnl = (entry_price + shortLeg + longLeg) * multiplier;
+      } else {
+        // Bull Put Spread
+        const shortLeg = -Math.max(strikes.short - p, 0);
+        const longLeg = Math.max(strikes.long - p, 0);
+        pnl = (entry_price + shortLeg + longLeg) * multiplier;
+      }
+    } else if (strategy === 'ironCondor') {
+      const shortPutLeg = -Math.max(strikes.shortPut - p, 0);
+      const longPutLeg = Math.max(strikes.longPut - p, 0);
+      const shortCallLeg = -Math.max(p - strikes.shortCall, 0);
+      const longCallLeg = Math.max(p - strikes.longCall, 0);
+      pnl = (entry_price + shortPutLeg + longPutLeg + shortCallLeg + longCallLeg) * multiplier;
+    }
+    
+    yData.push(pnl.toFixed(2));
+  }
+
+  const option = {
+    backgroundColor: '#1e222d',
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params) => {
+        const price = params[0].name;
+        const pnl = Number(params[0].value);
+        const color = pnl >= 0 ? '#26a69a' : '#ef5350';
+        return `結算價: $${price}<br/>損益: <span style="color:${color};font-weight:bold;">$${pnl.toFixed(2)}</span>`;
+      }
+    },
+    xAxis: {
+      type: 'category',
+      name: '到期結算價',
+      data: xData,
+      axisLine: { lineStyle: { color: '#8c8f98' } }
+    },
+    yAxis: {
+      type: 'value',
+      name: '總損益 (USD)',
+      axisLine: { lineStyle: { color: '#8c8f98' } },
+      splitLine: { lineStyle: { color: '#2b2b43' } }
+    },
+    // 利用 visualMap 將 0 軸以上的線條塗綠色，0 軸以下塗紅色
+    visualMap: {
+      show: false,
+      pieces: [
+        { gt: 0, color: '#26a69a' }, 
+        { lte: 0, color: '#ef5350' }
+      ]
+    },
+    series: [
+      {
+        data: yData,
+        type: 'line',
+        symbol: 'none',
+        lineStyle: { width: 3 },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          label: { position: 'end', formatter: '{b}' },
+          data: [
+            { yAxis: 0, lineStyle: { color: '#8c8f98', type: 'dashed' }, name: '損益兩平' }
+          ]
+        },
+        markPoint: {
+          symbol: 'pin',
+          symbolSize: 40,
+          label: { color: '#fff', fontSize: 10 },
+          itemStyle: { color: '#e0ac00' },
+          data: [
+            { type: 'max', name: '最大營利' },
+            { type: 'min', name: '最大虧損' }
+          ]
+        }
+      }
+    ]
+  };
+
+  payoffChartInstance.setOption(option);
 };
 </script>
 
@@ -354,7 +469,6 @@ const cancelEdit = () => {
 }
 @media (max-width: 992px) { .journal-layout { grid-template-columns: 1fr; } }
 
-/* 月曆區塊 */
 .calendar-section { background-color: #1e222d; padding: 20px; border-radius: 8px; border: 1px solid #2b2b43; }
 .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .current-month { color: #fff; font-size: 1.2rem; margin: 0; }
@@ -375,7 +489,6 @@ const cancelEdit = () => {
 .trade-dots { display: flex; gap: 4px; margin-top: 4px; }
 .dot { width: 6px; height: 6px; background-color: #e0ac00; border-radius: 50%; }
 
-/* 列表區塊 */
 .trade-card { background-color: #2a2e39; border-left: 4px solid #8c8f98; padding: 16px; border-radius: 6px; margin-bottom: 12px; }
 .trade-card.open { border-color: #e0ac00; }
 .trade-card.win { border-color: #26a69a; }
@@ -386,10 +499,10 @@ const cancelEdit = () => {
 .strikes-detail { background-color: #131722; padding: 6px; border-radius: 4px; margin: 6px 0; }
 .trade-card-actions { display: flex; gap: 8px; }
 .action-btn { flex: 1; border: none; padding: 6px; border-radius: 4px; font-size: 0.85rem; cursor: pointer; }
+.view-btn { background-color: #e0ac00; color: #fff; } /* 新增圖表按鈕樣式 */
 .edit-btn { background-color: #2962ff; color: #fff; }
 .delete-btn { background-color: rgba(239, 83, 80, 0.2); color: #ef5350; }
 
-/* 表單區塊 */
 .form-section { background-color: #1e222d; padding: 20px; border-radius: 8px; border: 1px solid #2b2b43; }
 .form-group { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
 .form-group label { font-size: 0.9rem; color: #8c8f98; }
@@ -401,4 +514,17 @@ const cancelEdit = () => {
 .submit-btn { background-color: #2962ff; color: #fff; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .submit-btn:hover { background-color: #1e4bd8; }
 .cancel-btn { background-color: transparent; border: 1px solid #434651; color: #d1d4dc; padding: 12px; border-radius: 6px; cursor: pointer; }
+
+/* 🔥 Modal 樣式 */
+.chart-modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background-color: rgba(0, 0, 0, 0.8); z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+}
+.chart-modal-content {
+  background-color: #131722; border: 1px solid #2b2b43; border-radius: 12px;
+  width: 90%; max-width: 800px; padding: 24px; box-shadow: 0 12px 48px rgba(0,0,0,0.5);
+}
+.close-btn { background: none; border: none; color: #8c8f98; font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
+.close-btn:hover { color: #fff; }
 </style>
