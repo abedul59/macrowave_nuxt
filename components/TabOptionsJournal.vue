@@ -2,6 +2,14 @@
   <div class="journal-dashboard">
     <div class="header">
       <h2 class="title">📖 選擇權貸方交易日誌 (Credit Spreads Journal)</h2>
+      <!-- 🔥 新增：匯出與匯入功能區塊 -->
+      <div class="export-actions">
+        <button class="export-btn csv" @click="exportCSV">📥 匯出 CSV (Excel用)</button>
+        <button class="export-btn json" @click="exportJSON">📥 匯出 JSON (備份用)</button>
+        <button class="export-btn import" @click="triggerImport">📤 匯入 JSON (還原)</button>
+        <!-- 隱藏的檔案上傳輸入框 -->
+        <input type="file" ref="fileInput" accept=".json" style="display: none" @change="handleImport" />
+      </div>
     </div>
 
     <div class="journal-layout">
@@ -122,7 +130,6 @@
             <input type="date" v-model="form.expiry" required class="dark-input" />
           </div>
 
-          <!-- 🔥 防呆處理：加入 v-model.number 確保型別為數字 -->
           <div v-if="form.strategy === 'bullPut'" class="strikes-grid">
             <div class="form-group">
               <label class="text-danger">賣出 (Short) Put 履約價</label>
@@ -177,6 +184,7 @@
           <div class="form-group border-top border-secondary pt-3 mt-2">
             <label class="text-warning">
               提早平倉成本 (Exit Debit / 點數) 
+              <span class="text-muted fs-7 ml-2">※ 若不幸需停損，或提早獲利了結時填寫</span>
             </label>
             <input type="number" step="0.01" v-model.number="form.exitPrice" class="dark-input" placeholder="未平倉請留空" />
           </div>
@@ -302,28 +310,24 @@ const resetStrikes = () => {
   form.value.strikes = { shortPut: null, longPut: null, shortCall: null, longCall: null };
 };
 
-// 🔥 核心防呆邏輯：自動將數字排序，確保買賣權的位置正確
 const getSafeStrikes = (strategy, strikes) => {
   let sP = Number(strikes.shortPut) || 0;
   let lP = Number(strikes.longPut) || 0;
   let sC = Number(strikes.shortCall) || 0;
   let lC = Number(strikes.longCall) || 0;
 
-  // Put 端：Long 必須小於 Short
   if (strategy === 'bullPut' || strategy === 'ironCondor') {
     const min = Math.min(sP, lP);
     const max = Math.max(sP, lP);
     lP = min;
     sP = max;
   }
-  // Call 端：Long 必須大於 Short
   if (strategy === 'bearCall' || strategy === 'ironCondor') {
     const min = Math.min(sC, lC);
     const max = Math.max(sC, lC);
     sC = min;
     lC = max;
   }
-  // 舊版垂直價差相容
   let s = Number(strikes.short) || 0;
   let l = Number(strikes.long) || 0;
 
@@ -414,6 +418,82 @@ const cancelEdit = () => {
 };
 
 // ==========================================
+// 🔥 匯出 / 匯入功能邏輯
+// ==========================================
+const fileInput = ref(null);
+
+const exportJSON = () => {
+  if (allTrades.value.length === 0) return alert('目前沒有紀錄可以匯出！');
+  const dataStr = JSON.stringify(allTrades.value, null, 2);
+  const blob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `MacroWave_Options_Journal_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const exportCSV = () => {
+  if (allTrades.value.length === 0) return alert('目前沒有紀錄可以匯出！');
+  const headers = ['id', 'date', 'ticker', 'strategy', 'expiry', 'strikes', 'contracts', 'entry_price', 'exit_price', 'status', 'pnl'];
+  
+  const rows = allTrades.value.map(t => {
+    return headers.map(h => {
+      let val = t[h];
+      if (h === 'strikes') val = JSON.stringify(val); // 將履約價轉為字串以適應 CSV
+      if (val === null || val === undefined) val = '';
+      // 處理 CSV 跳脫字元 (將引號變雙引號，並用引號包覆整格)
+      val = `"${String(val).replace(/"/g, '""')}"`;
+      return val;
+    }).join(',');
+  });
+
+  // 加入 BOM (\uFEFF) 讓 Excel 能夠正確識別 UTF-8 中文
+  const csvContent = "\uFEFF" + headers.join(',') + '\n' + rows.join('\n'); 
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `MacroWave_Options_Journal_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const triggerImport = () => {
+  if (confirm('⚠️ 警告：匯入功能將會覆蓋/更新您現有的資料庫紀錄。請確認您上傳的是之前匯出的 JSON 備份檔。是否繼續？')) {
+    fileInput.value.click();
+  }
+};
+
+const handleImport = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const content = e.target.result;
+      const importedData = JSON.parse(content);
+
+      if (!Array.isArray(importedData)) throw new Error("資料格式錯誤，必須為陣列結構。");
+
+      // 利用 Supabase 的 upsert 寫入資料庫 (根據 ID 覆蓋或新增)
+      const { error } = await supabase.from('options_journal').upsert(importedData);
+      
+      if (error) throw error;
+
+      alert(`✅ 成功匯入並同步了 ${importedData.length} 筆交易紀錄至資料庫！`);
+      await fetchTrades(); // 重新拉取最新資料
+    } catch (err) {
+      alert("❌ 匯入失敗，請確認檔案格式是否正確。\n錯誤訊息：" + err.message);
+    }
+    event.target.value = ''; // 重置 input
+  };
+  reader.readAsText(file);
+};
+
+// ==========================================
 // 📊 到期損益圖 (Payoff Diagram)
 // ==========================================
 const isChartModalOpen = ref(false);
@@ -443,7 +523,6 @@ const renderPayoffChart = (trade) => {
   const { strategy, strikes, entry_price, contracts } = trade;
   const multiplier = 100 * contracts;
   
-  // 使用防呆函式取得正確的履約價順序
   const { sP, lP, sC, lC, s, l } = getSafeStrikes(strategy, strikes);
   
   let minStrike = Infinity, maxStrike = -Infinity;
@@ -463,7 +542,7 @@ const renderPayoffChart = (trade) => {
   
   const startPrice = minStrike * 0.85; 
   const endPrice = maxStrike * 1.15;   
-  const step = (endPrice - startPrice) / 400; // 提高密度讓梯形邊角更銳利
+  const step = (endPrice - startPrice) / 400; 
 
   for (let p = startPrice; p <= endPrice; p += step) {
     let pnl = 0;
@@ -571,7 +650,20 @@ const renderPayoffChart = (trade) => {
   border-radius: 12px; font-family: -apple-system, sans-serif;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); margin: 0 auto;
 }
-.title { font-size: 1.5rem; font-weight: 600; color: #fff; margin-bottom: 24px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+.title { font-size: 1.5rem; font-weight: 600; color: #fff; margin: 0; }
+
+/* 匯出/匯入按鈕區域 */
+.export-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.export-btn { 
+  background: transparent; border: 1px solid #434651; color: #d1d4dc; 
+  padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; font-weight: bold; 
+  cursor: pointer; transition: all 0.2s; 
+}
+.export-btn:hover { background: #2a2e39; color: #fff; }
+.export-btn.csv:hover { border-color: #00bcd4; color: #00bcd4; }
+.export-btn.json:hover { border-color: #26a69a; color: #26a69a; }
+.export-btn.import:hover { border-color: #e0ac00; color: #e0ac00; }
 
 .journal-layout {
   display: grid; grid-template-columns: 1fr 1fr; gap: 32px;
