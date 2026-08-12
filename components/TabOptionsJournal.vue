@@ -104,7 +104,6 @@
                 建倉總收租 (Credit): ${{ Number(trade.entry_price).toFixed(2) }}
               </div>
               
-              <!-- 顯示最大損益 -->
               <div class="risk-box mt-2 mb-2" v-if="trade.entry_price !== null">
                 <div class="d-flex justify-content-between mb-1 text-success fs-7">
                   <span>✅ 最大收益 (總計 / 每口):</span>
@@ -122,7 +121,6 @@
                 </div>
               </div>
 
-              <!-- 🔥 新增：鐵鷹智慧型平倉明細顯示 -->
               <div class="trade-detail text-warning" v-if="trade.strategy === 'ironCondor' && (trade.exit_price !== null || trade.strikes.exitPut !== null || trade.strikes.exitCall !== null)">
                 <template v-if="trade.strikes.closeMode === 'split'">
                   拆腳平倉支出 (Debit): 
@@ -188,7 +186,6 @@
             <input type="date" v-model="form.expiry" required class="dark-input" />
           </div>
 
-          <!-- 履約價設定 -->
           <div v-if="form.strategy === 'bullPut'" class="strikes-grid">
             <div class="form-group">
               <label class="text-danger">賣出 (Short) Put</label>
@@ -254,7 +251,6 @@
               <input type="number" step="0.01" v-model.number="form.exitPrice" class="dark-input" placeholder="歸零請填 0" />
             </div>
 
-            <!-- 🔥 新增：鐵鷹策略的平倉模式選單 -->
             <template v-if="form.strategy === 'ironCondor'">
               <div class="form-group">
                 <label class="text-warning">鐵鷹平倉模式 (Close Mode)</label>
@@ -264,13 +260,11 @@
                 </select>
               </div>
 
-              <!-- 四腳整組平倉 -->
               <div class="form-group" v-if="form.strikes.closeMode === 'all'">
                 <label class="text-warning">整組每口平倉支出 (Total Exit Debit)</label>
                 <input type="number" step="0.01" v-model.number="form.exitPrice" class="dark-input" placeholder="歸零請填 0" />
               </div>
 
-              <!-- 拆單獨立平倉 -->
               <div class="strikes-grid" v-if="form.strikes.closeMode === 'split'">
                 <div class="form-group">
                   <label class="text-warning">Put 邊每口平倉支出</label>
@@ -284,7 +278,6 @@
             </template>
           </div>
 
-          <!-- 試算預覽面板 -->
           <div class="calc-preview mt-3" v-if="formStats">
             <h5 class="calc-title mb-3">💡 交易試算預覽</h5>
             <div class="d-flex justify-content-between mb-2">
@@ -302,7 +295,6 @@
               </span>
             </div>
             
-            <!-- 預覽平倉損益 -->
             <div v-if="formStats.exitDetails" class="pt-2 mt-2 border-top border-secondary">
               <div class="text-white mb-2 fw-bold">👉 平倉實際損益拆解：</div>
               <div class="d-flex justify-content-between fs-7 mb-1 text-success">
@@ -358,7 +350,7 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- 模式二：到期結算總覽介面 -->
+    <!-- 🔥 模式二：到期結算總覽介面 -->
     <!-- ========================================== -->
     <div v-else-if="viewMode === 'summary'" class="summary-layout mt-4">
       <div v-if="expirySummary.length === 0" class="text-muted text-center p-5 fs-5">
@@ -366,18 +358,20 @@
       </div>
 
       <div v-for="group in expirySummary" :key="group.expiry" class="expiry-group-card mb-4">
-        <div class="expiry-header">
-          <h3 class="m-0 text-white mb-3">⌛ <span class="text-warning">到期日:</span> {{ group.expiry }}</h3>
-          <div class="summary-stats d-flex flex-wrap gap-2">
-            <div class="stat-item text-success flex-fill">
+        <div class="expiry-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+          <h3 class="m-0 text-white d-flex align-items-center gap-2">
+            ⌛ <span class="text-warning">到期日:</span> {{ group.expiry }}
+          </h3>
+          <div class="summary-stats d-flex flex-wrap gap-4">
+            <div class="stat-item text-success">
               <div class="fs-7 opacity-75">✅ 該群組建倉總收租</div>
               <div>${{ group.totalCredit.toFixed(2) }}</div>
             </div>
-            <div class="stat-item text-info flex-fill">
+            <div class="stat-item text-info">
               <div class="fs-7 opacity-75">⏳ 未平倉剩餘價值 (放至歸零)</div>
               <div>${{ group.openCredit.toFixed(2) }}</div>
             </div>
-            <div class="stat-item flex-fill" :class="group.realizedPnL >= 0 ? 'text-success' : 'text-danger'">
+            <div class="stat-item" :class="group.realizedPnL >= 0 ? 'text-success' : 'text-danger'">
               <div class="fs-7 opacity-75">🚪 已平倉實際損益 (含單邊)</div>
               <div>{{ group.realizedPnL >= 0 ? '+' : '' }}${{ group.realizedPnL.toFixed(2) }}</div>
             </div>
@@ -396,6 +390,8 @@
                 <th>每口收租</th>
                 <th>該筆總收租</th>
                 <th>提前平倉損益</th>
+                <!-- 🔥 新增操作欄位 -->
+                <th class="text-center">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -405,7 +401,7 @@
                     {{ trade.status === 'closed' ? '已平倉' : '持倉中' }}
                   </span>
                 </td>
-                <td class="fw-bold text-white">{{ trade.ticker }}</td>
+                <td class="fw-bold text-white fs-6">{{ trade.ticker }}</td>
                 <td class="text-muted">{{ getStrategyName(trade.strategy) }}</td>
                 <td class="fs-7">
                   <span v-if="trade.strategy === 'bullPut'">P(賣:{{trade.strikes.shortPut}}, 買:{{trade.strikes.longPut}})</span>
@@ -421,6 +417,14 @@
                     {{ trade.pnl >= 0 ? '+' : '' }}${{ trade.pnl.toFixed(2) }}
                   </span>
                   <span v-else class="text-muted">-</span>
+                </td>
+                <!-- 🔥 新增的清單操作按鈕 -->
+                <td>
+                  <div class="table-actions justify-content-center">
+                    <button class="table-action-btn view" @click="openPayoffChart(trade)" title="預覽損益圖">📊</button>
+                    <button class="table-action-btn edit" @click="editTrade(trade)" title="編輯或平倉">✏️</button>
+                    <button class="table-action-btn delete" @click="deleteTrade(trade.id)" title="刪除">🗑️</button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -507,10 +511,8 @@ const expirySummary = computed(() => {
     if (trade.status === 'closed') {
       groups[exp].realizedPnL += (trade.pnl || 0);
     } else {
-      // 若為鐵鷹單邊平倉，仍將部分虧損計入已實現損益，剩餘時間價值留作未平倉
       if (trade.pnl !== 0) {
         groups[exp].realizedPnL += trade.pnl;
-        // 計算該筆的原始收租不該全算在未平倉內，只算沒平倉的腳的利潤，為簡單起見這裡就不拆分
       }
       groups[exp].openCredit += credit;
     }
@@ -638,7 +640,7 @@ const saveTrade = async () => {
 
   if (form.value.strategy === 'ironCondor') {
     if (form.value.strikes.closeMode === 'split') {
-      form.value.exitPrice = null; // 清除總平倉成本以防混淆
+      form.value.exitPrice = null; 
       const hasPut = form.value.strikes.exitPut !== null && form.value.strikes.exitPut !== '';
       const hasCall = form.value.strikes.exitCall !== null && form.value.strikes.exitCall !== '';
       if (hasPut || hasCall) {
@@ -690,6 +692,14 @@ const editTrade = (trade) => {
   isEditing.value = true;
   editingId.value = trade.id;
   viewMode.value = 'calendar'; 
+  
+  // 🔥 自動將日曆切換到該筆交易的建倉日
+  if (trade.date) {
+    const [y, m, d] = trade.date.split('-');
+    currentYear.value = parseInt(y, 10);
+    currentMonth.value = parseInt(m, 10) - 1;
+    selectedDay.value = parseInt(d, 10);
+  }
   
   const mode = trade.strikes.closeMode || (trade.strikes.exitPut !== undefined && trade.strikes.exitPut !== null ? 'split' : 'all');
 
@@ -1027,12 +1037,23 @@ const renderPayoffChart = (trade) => {
 .summary-stats { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .stat-item { background-color: #131722; padding: 12px; border-radius: 6px; border: 1px solid #434651; font-size: 1.1rem; font-weight: bold; }
 .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.summary-table { width: 100%; min-width: 600px; border-collapse: collapse; text-align: left; }
+.summary-table { width: 100%; min-width: 700px; border-collapse: collapse; text-align: left; }
 .summary-table th { color: #8c8f98; border-bottom: 1px solid #2b2b43; padding: 12px 8px; font-size: 0.85rem; }
 .summary-table td { padding: 12px 8px; border-bottom: 1px solid #2b2b43; color: #d1d4dc; font-size: 0.9rem; }
 .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; }
 .bg-primary { background-color: rgba(41, 98, 255, 0.2); color: #2962ff; border: 1px solid #2962ff; }
 .bg-secondary { background-color: rgba(140, 143, 152, 0.2); color: #8c8f98; border: 1px solid #8c8f98; }
+
+/* 🔥 總覽清單的行動按鈕樣式 */
+.table-actions { display: flex; gap: 6px; }
+.table-action-btn { 
+  background: transparent; border: 1px solid #434651; border-radius: 4px; 
+  padding: 4px 8px; cursor: pointer; transition: 0.2s; font-size: 0.9rem;
+}
+.table-action-btn:hover { background: #2a2e39; color: #fff; }
+.table-action-btn.edit:hover { border-color: #2962ff; }
+.table-action-btn.delete:hover { border-color: #ef5350; }
+.table-action-btn.view:hover { border-color: #e0ac00; }
 
 .chart-modal-overlay {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -1045,9 +1066,6 @@ const renderPayoffChart = (trade) => {
 }
 .close-btn { background: none; border: none; color: #8c8f98; font-size: 1.5rem; }
 
-/* =====================================
-   大螢幕 (Desktop) CSS 設計覆蓋
-   ===================================== */
 @media (min-width: 768px) {
   .journal-dashboard { padding: 24px; }
   .header { flex-direction: row; }
