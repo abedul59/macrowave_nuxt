@@ -1,24 +1,26 @@
 <template>
   <div class="journal-dashboard">
     <!-- 頂部標題與匯出功能 -->
-    <div class="header">
-      <h2 class="title m-0">📖 選擇權貸方交易日誌</h2>
-      <div class="export-actions">
-        <button class="export-btn csv" @click="exportCSV">📥 匯出 CSV</button>
-        <button class="export-btn json" @click="exportJSON">📥 匯出 JSON</button>
-        <button class="export-btn import" @click="triggerImport">📤 匯入 JSON</button>
-        <input type="file" ref="fileInput" accept=".json" style="display: none" @change="handleImport" />
+    <div class="header flex-column align-items-start gap-3">
+      <div class="d-flex justify-content-between w-100 align-items-center flex-wrap gap-3">
+        <h2 class="title m-0">📖 選擇權貸方交易日誌 (Credit Spreads Journal)</h2>
+        <div class="export-actions">
+          <button class="export-btn csv" @click="exportCSV">📥 匯出 CSV</button>
+          <button class="export-btn json" @click="exportJSON">📥 匯出 JSON</button>
+          <button class="export-btn import" @click="triggerImport">📤 匯入 JSON</button>
+          <input type="file" ref="fileInput" accept=".json" style="display: none" @change="handleImport" />
+        </div>
       </div>
-    </div>
       
-    <!-- 雙模式切換按鈕 -->
-    <div class="view-toggles mt-3 mb-2">
-      <button class="view-btn" :class="{ active: viewMode === 'calendar' }" @click="viewMode = 'calendar'">
-        📅 交易日曆與編輯
-      </button>
-      <button class="view-btn" :class="{ active: viewMode === 'summary' }" @click="viewMode = 'summary'">
-        🎯 到期結算總覽
-      </button>
+      <!-- 雙模式切換按鈕 -->
+      <div class="view-toggles mt-2 mb-1">
+        <button class="view-btn" :class="{ active: viewMode === 'calendar' }" @click="viewMode = 'calendar'">
+          📅 交易日曆與編輯
+        </button>
+        <button class="view-btn" :class="{ active: viewMode === 'summary' }" @click="viewMode = 'summary'">
+          🎯 到期結算總覽
+        </button>
+      </div>
     </div>
 
     <!-- ========================================== -->
@@ -102,6 +104,7 @@
                 建倉總收租 (Credit): ${{ Number(trade.entry_price).toFixed(2) }}
               </div>
               
+              <!-- 顯示最大損益 -->
               <div class="risk-box mt-2 mb-2" v-if="trade.entry_price !== null">
                 <div class="d-flex justify-content-between mb-1 text-success fs-7">
                   <span>✅ 最大收益 (總計 / 每口):</span>
@@ -119,12 +122,19 @@
                 </div>
               </div>
 
-              <div class="trade-detail text-warning" v-if="trade.strategy === 'ironCondor' && (trade.strikes.exitPut !== null || trade.strikes.exitCall !== null)">
-                平倉支出 (Debit): 
-                <span v-if="trade.strikes.exitPut !== null">Put端 ${{ Number(trade.strikes.exitPut).toFixed(2) }}</span>
-                <span v-if="trade.strikes.exitPut !== null && trade.strikes.exitCall !== null"> | </span>
-                <span v-if="trade.strikes.exitCall !== null">Call端 ${{ Number(trade.strikes.exitCall).toFixed(2) }}</span>
+              <!-- 🔥 新增：鐵鷹智慧型平倉明細顯示 -->
+              <div class="trade-detail text-warning" v-if="trade.strategy === 'ironCondor' && (trade.exit_price !== null || trade.strikes.exitPut !== null || trade.strikes.exitCall !== null)">
+                <template v-if="trade.strikes.closeMode === 'split'">
+                  拆腳平倉支出 (Debit): 
+                  <span v-if="trade.strikes.exitPut !== null && trade.strikes.exitPut !== ''">Put端 ${{ Number(trade.strikes.exitPut).toFixed(2) }}</span>
+                  <span v-if="(trade.strikes.exitPut !== null && trade.strikes.exitPut !== '') && (trade.strikes.exitCall !== null && trade.strikes.exitCall !== '')"> | </span>
+                  <span v-if="trade.strikes.exitCall !== null && trade.strikes.exitCall !== ''">Call端 ${{ Number(trade.strikes.exitCall).toFixed(2) }}</span>
+                </template>
+                <template v-else>
+                  四腳總平倉支出 (Debit): ${{ Number(trade.exit_price).toFixed(2) }}
+                </template>
               </div>
+              
               <div class="trade-detail text-warning" v-else-if="trade.strategy !== 'ironCondor' && trade.exit_price !== null">
                 平倉成本 (Debit): ${{ Number(trade.exit_price).toFixed(2) }}
               </div>
@@ -136,7 +146,7 @@
                 </span>
               </div>
             </div>
-            <!-- 手機版按鈕會自動折行堆疊 -->
+            
             <div class="trade-card-actions mt-3 flex-wrap">
               <button class="action-btn view-btn flex-fill" @click="openPayoffChart(trade)">📊 預覽到期圖</button>
               <button class="action-btn edit-btn flex-fill" @click="editTrade(trade)">編輯 / 登錄平倉</button>
@@ -167,9 +177,9 @@
           <div class="form-group">
             <label>策略類型</label>
             <select v-model="form.strategy" class="dark-input" @change="resetStrikes">
-              <option value="bullPut">📉 賣權多頭 (Bull Put Spread)</option>
-              <option value="bearCall">📈 買權空頭 (Bear Call Spread)</option>
-              <option value="ironCondor">🦅 鐵鷹 (Iron Condor)</option>
+              <option value="bullPut">📉 賣權多頭 (Bull Put Spread) - 看漲/盤整</option>
+              <option value="bearCall">📈 買權空頭 (Bear Call Spread) - 看跌/盤整</option>
+              <option value="ironCondor">🦅 鐵鷹 (Iron Condor) - 區間盤整</option>
             </select>
           </div>
 
@@ -178,7 +188,7 @@
             <input type="date" v-model="form.expiry" required class="dark-input" />
           </div>
 
-          <!-- 手機版自動切換單列或雙列 -->
+          <!-- 履約價設定 -->
           <div v-if="form.strategy === 'bullPut'" class="strikes-grid">
             <div class="form-group">
               <label class="text-danger">賣出 (Short) Put</label>
@@ -244,29 +254,55 @@
               <input type="number" step="0.01" v-model.number="form.exitPrice" class="dark-input" placeholder="歸零請填 0" />
             </div>
 
-            <div class="strikes-grid" v-if="form.strategy === 'ironCondor'">
+            <!-- 🔥 新增：鐵鷹策略的平倉模式選單 -->
+            <template v-if="form.strategy === 'ironCondor'">
               <div class="form-group">
-                <label class="text-warning">Put 邊每口平倉支出</label>
-                <input type="number" step="0.01" v-model.number="form.strikes.exitPut" class="dark-input" placeholder="歸零請填 0" />
+                <label class="text-warning">鐵鷹平倉模式 (Close Mode)</label>
+                <select v-model="form.strikes.closeMode" class="dark-input">
+                  <option value="all">🦅 四腳整組同時平倉 (單一輸入)</option>
+                  <option value="split">✂️ 拆腳平倉 (分別輸入 Put/Call 邊支出)</option>
+                </select>
               </div>
-              <div class="form-group">
-                <label class="text-warning">Call 邊每口平倉支出</label>
-                <input type="number" step="0.01" v-model.number="form.strikes.exitCall" class="dark-input" placeholder="歸零請填 0" />
+
+              <!-- 四腳整組平倉 -->
+              <div class="form-group" v-if="form.strikes.closeMode === 'all'">
+                <label class="text-warning">整組每口平倉支出 (Total Exit Debit)</label>
+                <input type="number" step="0.01" v-model.number="form.exitPrice" class="dark-input" placeholder="歸零請填 0" />
               </div>
-            </div>
+
+              <!-- 拆單獨立平倉 -->
+              <div class="strikes-grid" v-if="form.strikes.closeMode === 'split'">
+                <div class="form-group">
+                  <label class="text-warning">Put 邊每口平倉支出</label>
+                  <input type="number" step="0.01" v-model.number="form.strikes.exitPut" class="dark-input" placeholder="未平倉留空，歸零填 0" />
+                </div>
+                <div class="form-group">
+                  <label class="text-warning">Call 邊每口平倉支出</label>
+                  <input type="number" step="0.01" v-model.number="form.strikes.exitCall" class="dark-input" placeholder="未平倉留空，歸零填 0" />
+                </div>
+              </div>
+            </template>
           </div>
 
+          <!-- 試算預覽面板 -->
           <div class="calc-preview mt-3" v-if="formStats">
             <h5 class="calc-title mb-3">💡 交易試算預覽</h5>
             <div class="d-flex justify-content-between mb-2">
-              <span class="text-muted">到期最大收益:</span>
-              <span class="text-success fw-bold">${{ formStats.maxProfit.toFixed(2) }}</span>
+              <span class="text-muted">到期最大收益 (總計 / 每口):</span>
+              <span class="text-success fw-bold">
+                ${{ formStats.maxProfit.toFixed(2) }} 
+                <span class="fs-7 text-muted">(${{ formStats.perContractProfit.toFixed(2) }})</span>
+              </span>
             </div>
             <div class="d-flex justify-content-between mb-2">
-              <span class="text-muted">到期最大虧損:</span>
-              <span class="text-danger fw-bold">${{ formStats.maxLoss.toFixed(2) }}</span>
+              <span class="text-muted">到期最大虧損 (總計 / 每口):</span>
+              <span class="text-danger fw-bold">
+                ${{ formStats.maxLoss.toFixed(2) }} 
+                <span class="fs-7 text-muted">(${{ formStats.perContractLoss.toFixed(2) }})</span>
+              </span>
             </div>
             
+            <!-- 預覽平倉損益 -->
             <div v-if="formStats.exitDetails" class="pt-2 mt-2 border-top border-secondary">
               <div class="text-white mb-2 fw-bold">👉 平倉實際損益拆解：</div>
               <div class="d-flex justify-content-between fs-7 mb-1 text-success">
@@ -275,17 +311,26 @@
               </div>
               
               <template v-if="form.strategy === 'ironCondor'">
-                <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="form.strikes.exitPut !== null && form.strikes.exitPut !== ''">
-                  <span>➖ Put 邊支出:</span>
-                  <span>-${{ (form.strikes.exitPut * 100 * form.contracts).toFixed(2) }}</span>
-                </div>
-                <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="form.strikes.exitCall !== null && form.strikes.exitCall !== ''">
-                  <span>➖ Call 邊支出:</span>
-                  <span>-${{ (form.strikes.exitCall * 100 * form.contracts).toFixed(2) }}</span>
-                </div>
+                <template v-if="form.strikes.closeMode === 'split'">
+                  <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="form.strikes.exitPut !== null && form.strikes.exitPut !== ''">
+                    <span>➖ Put 邊支出:</span>
+                    <span>-${{ (form.strikes.exitPut * 100 * form.contracts).toFixed(2) }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="form.strikes.exitCall !== null && form.strikes.exitCall !== ''">
+                    <span>➖ Call 邊支出:</span>
+                    <span>-${{ (form.strikes.exitCall * 100 * form.contracts).toFixed(2) }}</span>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="form.exitPrice !== null && form.exitPrice !== ''">
+                    <span>➖ 四腳總平倉支出:</span>
+                    <span>-${{ (form.exitPrice * 100 * form.contracts).toFixed(2) }}</span>
+                  </div>
+                </template>
               </template>
+              
               <template v-else>
-                <div class="d-flex justify-content-between fs-7 mb-1 text-danger">
+                <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="form.exitPrice !== null && form.exitPrice !== ''">
                   <span>➖ 平倉總支出:</span>
                   <span>-${{ (form.exitPrice * 100 * form.contracts).toFixed(2) }}</span>
                 </div>
@@ -315,7 +360,7 @@
     <!-- ========================================== -->
     <!-- 模式二：到期結算總覽介面 -->
     <!-- ========================================== -->
-    <div v-else-if="viewMode === 'summary'" class="summary-layout mt-3">
+    <div v-else-if="viewMode === 'summary'" class="summary-layout mt-4">
       <div v-if="expirySummary.length === 0" class="text-muted text-center p-5 fs-5">
         目前沒有任何交易紀錄
       </div>
@@ -329,11 +374,11 @@
               <div>${{ group.totalCredit.toFixed(2) }}</div>
             </div>
             <div class="stat-item text-info flex-fill">
-              <div class="fs-7 opacity-75">⏳ 未平倉剩餘價值</div>
+              <div class="fs-7 opacity-75">⏳ 未平倉剩餘價值 (放至歸零)</div>
               <div>${{ group.openCredit.toFixed(2) }}</div>
             </div>
             <div class="stat-item flex-fill" :class="group.realizedPnL >= 0 ? 'text-success' : 'text-danger'">
-              <div class="fs-7 opacity-75">🚪 已提前平倉實際損益</div>
+              <div class="fs-7 opacity-75">🚪 已平倉實際損益 (含單邊)</div>
               <div>{{ group.realizedPnL >= 0 ? '+' : '' }}${{ group.realizedPnL.toFixed(2) }}</div>
             </div>
           </div>
@@ -372,7 +417,7 @@
                 <td class="text-success">${{ Number(trade.entry_price).toFixed(2) }}</td>
                 <td class="text-success fw-bold">${{ (trade.entry_price * 100 * trade.contracts).toFixed(2) }}</td>
                 <td>
-                  <span v-if="trade.status === 'closed'" class="fw-bold" :class="trade.pnl >= 0 ? 'text-success' : 'text-danger'">
+                  <span v-if="trade.status === 'closed' || trade.pnl !== 0" class="fw-bold" :class="trade.pnl >= 0 ? 'text-success' : 'text-danger'">
                     {{ trade.pnl >= 0 ? '+' : '' }}${{ trade.pnl.toFixed(2) }}
                   </span>
                   <span v-else class="text-muted">-</span>
@@ -388,7 +433,7 @@
     <div v-if="isChartModalOpen" class="chart-modal-overlay" @click.self="closePayoffChart">
       <div class="chart-modal-content">
         <div class="chart-modal-header border-bottom border-secondary pb-3 mb-3 d-flex justify-content-between align-items-center">
-          <h4 class="m-0 fw-bold text-white fs-5">📊 {{ chartTradeData?.ticker }} 到期損益圖</h4>
+          <h4 class="m-0 fw-bold text-white fs-5">📊 {{ chartTradeData?.ticker }} 到期損益預測圖</h4>
           <button class="close-btn" @click="closePayoffChart">✖</button>
         </div>
         <div class="chart-modal-body">
@@ -462,6 +507,11 @@ const expirySummary = computed(() => {
     if (trade.status === 'closed') {
       groups[exp].realizedPnL += (trade.pnl || 0);
     } else {
+      // 若為鐵鷹單邊平倉，仍將部分虧損計入已實現損益，剩餘時間價值留作未平倉
+      if (trade.pnl !== 0) {
+        groups[exp].realizedPnL += trade.pnl;
+        // 計算該筆的原始收租不該全算在未平倉內，只算沒平倉的腳的利潤，為簡單起見這裡就不拆分
+      }
       groups[exp].openCredit += credit;
     }
   });
@@ -472,7 +522,7 @@ const getStrategyName = (val) => {
   if (val === 'bullPut') return '賣權多頭 (Bull Put)';
   if (val === 'bearCall') return '買權空頭 (Bear Call)';
   if (val === 'ironCondor') return '鐵鷹 (Iron Condor)';
-  return '垂直價差';
+  return '垂直價差 (舊版)';
 };
 
 const isEditing = ref(false);
@@ -480,7 +530,7 @@ const editingId = ref(null);
 
 const initialForm = {
   date: '', ticker: '', strategy: 'bullPut', expiry: '',
-  strikes: { shortPut: null, longPut: null, shortCall: null, longCall: null, exitPut: null, exitCall: null },
+  strikes: { shortPut: null, longPut: null, shortCall: null, longCall: null, closeMode: 'all', exitPut: null, exitCall: null },
   contracts: 1, entryPrice: null, exitPrice: null, exitDate: ''
 };
 const form = ref(JSON.parse(JSON.stringify(initialForm)));
@@ -490,14 +540,13 @@ watch(selectedDateStr, (newVal) => {
 }, { immediate: true });
 
 const resetStrikes = () => {
-  form.value.strikes = { shortPut: null, longPut: null, shortCall: null, longCall: null, exitPut: null, exitCall: null };
+  form.value.strikes = { shortPut: null, longPut: null, shortCall: null, longCall: null, closeMode: 'all', exitPut: null, exitCall: null };
+  form.value.exitPrice = null;
 };
 
 const getSafeStrikes = (strategy, strikes) => {
-  let sP = Number(strikes.shortPut) || 0;
-  let lP = Number(strikes.longPut) || 0;
-  let sC = Number(strikes.shortCall) || 0;
-  let lC = Number(strikes.longCall) || 0;
+  let sP = Number(strikes.shortPut) || 0, lP = Number(strikes.longPut) || 0;
+  let sC = Number(strikes.shortCall) || 0, lC = Number(strikes.longCall) || 0;
 
   if (strategy === 'bullPut' || strategy === 'ironCondor') {
     const min = Math.min(sP, lP), max = Math.max(sP, lP);
@@ -551,16 +600,25 @@ const formStats = computed(() => {
   let exitDetails = null;
 
   if (c.strategy === 'ironCondor') {
-    const hasPutExit = c.strikes.exitPut !== null && c.strikes.exitPut !== '';
-    const hasCallExit = c.strikes.exitCall !== null && c.strikes.exitCall !== '';
-    if (hasPutExit || hasCallExit) {
-      const putCost = hasPutExit ? Number(c.strikes.exitPut) : 0;
-      const callCost = hasCallExit ? Number(c.strikes.exitCall) : 0;
-      const pnl = (c.entryPrice - putCost - callCost) * 100 * c.contracts;
-      let statusText = '總計淨損益:';
-      if (hasPutExit && !hasCallExit) statusText = '單邊平倉 (Put) 暫時損益:';
-      if (!hasPutExit && hasCallExit) statusText = '單邊平倉 (Call) 暫時損益:';
-      exitDetails = { pnl, statusText };
+    if (c.strikes.closeMode === 'split') {
+      const hasPutExit = c.strikes.exitPut !== null && c.strikes.exitPut !== '';
+      const hasCallExit = c.strikes.exitCall !== null && c.strikes.exitCall !== '';
+      
+      if (hasPutExit || hasCallExit) {
+        const putCost = hasPutExit ? Number(c.strikes.exitPut) : 0;
+        const callCost = hasCallExit ? Number(c.strikes.exitCall) : 0;
+        const pnl = (c.entryPrice - putCost - callCost) * 100 * c.contracts;
+        
+        let statusText = '總計淨損益:';
+        if (hasPutExit && !hasCallExit) statusText = '單邊平倉 (Put) 暫時損益:';
+        if (!hasPutExit && hasCallExit) statusText = '單邊平倉 (Call) 暫時損益:';
+        exitDetails = { pnl, statusText };
+      }
+    } else {
+      if (c.exitPrice !== null && c.exitPrice !== '') {
+        const pnl = (c.entryPrice - c.exitPrice) * 100 * c.contracts;
+        exitDetails = { pnl, statusText: '四腳平倉總淨損益:' };
+      }
     }
   } else {
     if (c.exitPrice !== null && c.exitPrice !== '') {
@@ -574,16 +632,29 @@ const formStats = computed(() => {
 });
 
 const saveTrade = async () => {
-  let isClosed = false, totalExitPrice = null, pnl = 0;
+  let isClosed = false;
+  let totalExitPrice = null;
+  let pnl = 0;
 
   if (form.value.strategy === 'ironCondor') {
-    const hasPut = form.value.strikes.exitPut !== null && form.value.strikes.exitPut !== '';
-    const hasCall = form.value.strikes.exitCall !== null && form.value.strikes.exitCall !== '';
-    if (hasPut || hasCall) {
-      totalExitPrice = Number(form.value.strikes.exitPut || 0) + Number(form.value.strikes.exitCall || 0);
-      pnl = (form.value.entryPrice - totalExitPrice) * 100 * form.value.contracts;
+    if (form.value.strikes.closeMode === 'split') {
+      form.value.exitPrice = null; // 清除總平倉成本以防混淆
+      const hasPut = form.value.strikes.exitPut !== null && form.value.strikes.exitPut !== '';
+      const hasCall = form.value.strikes.exitCall !== null && form.value.strikes.exitCall !== '';
+      if (hasPut || hasCall) {
+        totalExitPrice = Number(form.value.strikes.exitPut || 0) + Number(form.value.strikes.exitCall || 0);
+        pnl = (form.value.entryPrice - totalExitPrice) * 100 * form.value.contracts;
+      }
+      if (hasPut && hasCall) isClosed = true;
+    } else {
+      form.value.strikes.exitPut = null;
+      form.value.strikes.exitCall = null;
+      if (form.value.exitPrice !== null && form.value.exitPrice !== '') {
+        totalExitPrice = Number(form.value.exitPrice);
+        pnl = (form.value.entryPrice - totalExitPrice) * 100 * form.value.contracts;
+        isClosed = true;
+      }
     }
-    if (hasPut && hasCall) isClosed = true;
   } else {
     if (form.value.exitPrice !== null && form.value.exitPrice !== '') {
       totalExitPrice = Number(form.value.exitPrice);
@@ -620,6 +691,8 @@ const editTrade = (trade) => {
   editingId.value = trade.id;
   viewMode.value = 'calendar'; 
   
+  const mode = trade.strikes.closeMode || (trade.strikes.exitPut !== undefined && trade.strikes.exitPut !== null ? 'split' : 'all');
+
   form.value = {
     date: trade.date,
     ticker: trade.ticker,
@@ -627,12 +700,13 @@ const editTrade = (trade) => {
     expiry: trade.expiry,
     strikes: {
       ...trade.strikes,
+      closeMode: mode,
       exitPut: trade.strikes.exitPut ?? null,
       exitCall: trade.strikes.exitCall ?? null
     },
     contracts: trade.contracts,
     entryPrice: trade.entry_price,
-    exitPrice: trade.exit_price !== null ? trade.exit_price : '',
+    exitPrice: trade.exit_price !== null && mode !== 'split' ? trade.exit_price : '',
     exitDate: trade.exit_date || ''
   };
 };
@@ -773,12 +847,17 @@ const renderPayoffChart = (trade) => {
 
   for (let p = startPrice; p <= endPrice; p += step) {
     let pnl = 0;
+    
     if (strategy === 'bullPut') {
       pnl = (entry_price - Math.max(sP - p, 0) + Math.max(lP - p, 0)) * multiplier;
     } else if (strategy === 'bearCall') {
       pnl = (entry_price - Math.max(p - sC, 0) + Math.max(p - lC, 0)) * multiplier;
     } else if (strategy === 'ironCondor') {
-      pnl = (entry_price - Math.max(sP - p, 0) + Math.max(lP - p, 0) - Math.max(p - sC, 0) + Math.max(p - lC, 0)) * multiplier;
+      pnl = (entry_price 
+             - Math.max(sP - p, 0) 
+             + Math.max(lP - p, 0) 
+             - Math.max(p - sC, 0) 
+             + Math.max(p - lC, 0)) * multiplier;
     } else if (strategy === 'vertical') {
       const isCallSpread = s < l;
       if (isCallSpread) pnl = (entry_price - Math.max(p - s, 0) + Math.max(p - l, 0)) * multiplier;
@@ -872,7 +951,6 @@ const renderPayoffChart = (trade) => {
 .header { display: flex; flex-direction: column; gap: 12px; }
 .title { font-size: 1.3rem; font-weight: 600; color: #fff; margin: 0; }
 
-/* 匯出按鈕區塊 (滿版自適應) */
 .export-actions { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
 .export-btn { 
   flex: 1; min-width: 100px; text-align: center;
@@ -885,7 +963,6 @@ const renderPayoffChart = (trade) => {
 .export-btn.json:hover { border-color: #26a69a; color: #26a69a; }
 .export-btn.import:hover { border-color: #e0ac00; color: #e0ac00; }
 
-/* 雙模式切換按鈕 (滿版切換) */
 .view-toggles { display: flex; flex-direction: column; gap: 8px; width: 100%; border-bottom: 1px solid #2b2b43; padding-bottom: 16px; }
 .view-btn { 
   width: 100%; padding: 12px; background-color: #1e222d; border: 1px solid #434651; 
@@ -893,10 +970,8 @@ const renderPayoffChart = (trade) => {
 }
 .view-btn.active { background-color: #2962ff; color: #fff; border-color: #2962ff; }
 
-/* 佈局切換：手機單行，電腦雙列 */
 .journal-layout { display: grid; grid-template-columns: 1fr; gap: 24px; }
 
-/* 左側：日曆與卡片 */
 .calendar-section { background-color: #1e222d; padding: 16px; border-radius: 8px; border: 1px solid #2b2b43; }
 .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .current-month { color: #fff; font-size: 1.1rem; margin: 0; }
@@ -913,7 +988,6 @@ const renderPayoffChart = (trade) => {
 .trade-dots { display: flex; gap: 2px; margin-top: 2px; }
 .dot { width: 4px; height: 4px; background-color: #e0ac00; border-radius: 50%; }
 
-/* 交易卡片 */
 .trade-card { background-color: #2a2e39; border-left: 4px solid #8c8f98; padding: 16px; border-radius: 6px; margin-bottom: 12px; }
 .trade-card.open { border-color: #e0ac00; }
 .trade-card.win { border-color: #26a69a; }
@@ -923,25 +997,21 @@ const renderPayoffChart = (trade) => {
 .trade-detail { font-size: 0.9rem; color: #b2b5be; margin-bottom: 6px; word-break: break-all; }
 .strikes-detail { background-color: #131722; padding: 8px; border-radius: 4px; margin: 8px 0; border-left: 3px solid #2962ff; }
 
-/* 風險面板 */
 .risk-box { background: rgba(0,0,0,0.25); padding: 10px; border-radius: 4px; border: 1px solid #434651; }
 .fs-7 { font-size: 0.8rem; }
 
-/* 卡片操作按鈕 (手機折行滿版) */
 .trade-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .action-btn { flex: 1; min-width: 80px; border: none; padding: 10px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; cursor: pointer; }
 .view-btn { background-color: #e0ac00; color: #131722; } 
 .edit-btn { background-color: #2962ff; color: #fff; }
 .delete-btn { background-color: rgba(239, 83, 80, 0.2); color: #ef5350; }
 
-/* 表單區塊 */
 .form-section { background-color: #1e222d; padding: 16px; border-radius: 8px; border: 1px solid #2b2b43; }
 .form-group { margin-bottom: 14px; display: flex; flex-direction: column; gap: 4px; }
 .form-group label { font-size: 0.85rem; color: #8c8f98; }
 .dark-input { background-color: #2a2e39; border: 1px solid #434651; color: #fff; padding: 12px 10px; border-radius: 6px; outline: none; font-size: 1rem; }
 .dark-input:focus { border-color: #2962ff; }
 
-/* 🔥 履約價網格：預設手機版採用 1 列或 2列 (2x2)，大螢幕再轉 4 列 */
 .strikes-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .strikes-grid-4 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
@@ -951,7 +1021,6 @@ const renderPayoffChart = (trade) => {
 .submit-btn { background-color: #2962ff; color: #fff; border: none; padding: 14px; border-radius: 6px; font-weight: bold; font-size: 1rem; }
 .cancel-btn { background-color: transparent; border: 1px solid #434651; color: #d1d4dc; padding: 14px; border-radius: 6px; font-size: 1rem; }
 
-/* 模式二：結算總覽樣式 */
 .summary-layout { display: flex; flex-direction: column; gap: 16px; }
 .expiry-group-card { background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px; padding: 16px; }
 .expiry-header { border-bottom: 1px solid #2b2b43; padding-bottom: 12px; }
@@ -965,7 +1034,6 @@ const renderPayoffChart = (trade) => {
 .bg-primary { background-color: rgba(41, 98, 255, 0.2); color: #2962ff; border: 1px solid #2962ff; }
 .bg-secondary { background-color: rgba(140, 143, 152, 0.2); color: #8c8f98; border: 1px solid #8c8f98; }
 
-/* Modal 樣式 */
 .chart-modal-overlay {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
   background-color: rgba(0, 0, 0, 0.9); z-index: 9999;
