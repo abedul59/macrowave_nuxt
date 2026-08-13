@@ -66,7 +66,7 @@
             v-for="trade in dailyTrades" 
             :key="trade.id" 
             class="trade-card"
-            :class="trade.status === 'closed' ? (trade.pnl > 0 ? 'win' : 'loss') : 'open'"
+            :class="trade.status === 'closed' ? (trade.pnl > 0 ? 'win' : (trade.pnl === 0 ? 'zero' : 'loss')) : 'open'"
           >
             <div class="trade-card-header">
               <span class="fw-bold text-white fs-5">{{ trade.ticker }}</span>
@@ -74,8 +74,8 @@
             </div>
             <div class="trade-card-body">
               <div class="trade-detail d-flex flex-wrap gap-3 mb-2">
-                <span class="text-success">🟢 建倉: {{ trade.date }}</span>
-                <span class="text-danger" v-if="trade.exit_date">🔴 平倉: {{ trade.exit_date }}</span>
+                <span class="color-credit">🟢 建倉: {{ trade.date }}</span>
+                <span class="color-debit" v-if="trade.exit_date">🔴 平倉: {{ trade.exit_date }}</span>
                 <span class="text-info">⏳ 到期: {{ trade.expiry }}</span>
               </div>
               
@@ -97,19 +97,20 @@
               </div>
 
               <div class="trade-detail">口數: {{ trade.contracts }}</div>
-              <div class="trade-detail text-success" v-if="trade.entry_price !== null">
-                建倉時每口收租 (Credit): +${{ Number(trade.entry_price).toFixed(2) }}
+              <div class="trade-detail color-credit" v-if="trade.entry_price !== null">
+                建倉時每口平均收租 (Credit): +${{ Number(trade.entry_price).toFixed(2) }}
               </div>
               
+              <!-- 風險面板 -->
               <div class="risk-box mt-2 mb-2" v-if="trade.entry_price !== null">
-                <div class="d-flex justify-content-between mb-1 text-success fs-7">
+                <div class="d-flex justify-content-between mb-1 color-profit fs-7">
                   <span>✅ 最大收益 (總計 / 每口):</span>
                   <span class="fw-bold">
                     +${{ getTradeStats(trade).maxProfit.toFixed(2) }} 
                     <span class="text-muted opacity-75">(+${{ getTradeStats(trade).perContractProfit.toFixed(2) }})</span>
                   </span>
                 </div>
-                <div class="d-flex justify-content-between text-danger fs-7">
+                <div class="d-flex justify-content-between color-loss fs-7">
                   <span>❌ 最大虧損 (總計 / 每口):</span>
                   <span class="fw-bold">
                     -${{ getTradeStats(trade).maxLoss.toFixed(2) }} 
@@ -118,15 +119,15 @@
                 </div>
               </div>
 
-              <div class="trade-detail text-danger mt-2" v-if="getExitSummary(trade).hasExit">
-                提前平倉付回總額 (Debit): -${{ (getExitSummary(trade).totalDebitDollars / 100).toFixed(2) }}
+              <div class="trade-detail color-debit mt-2" v-if="getExitSummary(trade).hasExit">
+                提前平倉付回總金額: -${{ (getExitSummary(trade).totalDebitDollars).toFixed(2) }}
                 <span class="text-muted fs-7 ml-2">(平均每口 -${{ getExitSummary(trade).avgDebit.toFixed(2) }})</span>
               </div>
               
               <div class="trade-pnl mt-3 pt-2 border-top border-secondary fw-bold fs-6" v-if="trade.status === 'closed' || trade.pnl !== 0">
-                {{ trade.status === 'closed' ? '提前平倉總損益 (x100股)' : '未平倉暫時損益' }}: 
-                <span :class="trade.pnl >= 0 ? 'text-success' : 'text-danger'">
-                  {{ trade.pnl >= 0 ? '+' : '-' }}${{ Math.abs(trade.pnl).toFixed(2) }}
+                {{ trade.status === 'closed' ? '提前平倉最後總損益 (x100股)' : '未平倉暫時損益' }}: 
+                <span :class="getPnlColorClass(trade.pnl)">
+                  {{ trade.pnl === 0 ? '$0.00' : (trade.pnl > 0 ? '+' : '-') + '$' + Math.abs(trade.pnl).toFixed(2) }}
                 </span>
               </div>
             </div>
@@ -144,7 +145,6 @@
         <h3 class="text-white mb-4 border-bottom border-secondary pb-2">
           {{ isEditing ? '✏️ 編輯交易' : '📝 新增交易' }} 
         </h3>
-        <!-- 表單渲染區塊 (呼叫共用元件) -->
         <div class="trade-form-wrapper">
           <TradeForm 
             :form="form" 
@@ -170,7 +170,7 @@
         <div class="expiry-header d-flex justify-content-between align-items-start flex-wrap gap-3">
           <h3 class="m-0 text-white mb-3">⌛ <span class="text-warning">到期日:</span> {{ group.expiry }}</h3>
           <div class="summary-stats d-flex flex-wrap gap-2">
-            <div class="stat-item text-success flex-fill">
+            <div class="stat-item color-credit flex-fill">
               <div class="fs-7 opacity-75">✅ 該群組建倉總收租</div>
               <div>+${{ group.totalCredit.toFixed(2) }}</div>
             </div>
@@ -178,9 +178,9 @@
               <div class="fs-7 opacity-75">⏳ 未平倉剩餘價值 (放至歸零)</div>
               <div>+${{ group.openCredit.toFixed(2) }}</div>
             </div>
-            <div class="stat-item flex-fill" :class="group.realizedPnL >= 0 ? 'text-success' : 'text-danger'">
+            <div class="stat-item flex-fill" :class="getPnlColorClass(group.realizedPnL)">
               <div class="fs-7 opacity-75">🚪 已平倉實際損益 (含單邊)</div>
-              <div>{{ group.realizedPnL >= 0 ? '+' : '-' }}${{ Math.abs(group.realizedPnL).toFixed(2) }}</div>
+              <div>{{ group.realizedPnL === 0 ? '$0.00' : (group.realizedPnL > 0 ? '+' : '-') + '$' + Math.abs(group.realizedPnL).toFixed(2) }}</div>
             </div>
           </div>
         </div>
@@ -194,12 +194,13 @@
                 <th>策略</th>
                 <th>履約價細節</th>
                 <th>口數</th>
-                <th>建倉時每口收租<br/><span class="text-muted fs-7">(Credit)</span></th>
-                <th>該筆總收租<br/><span class="text-muted fs-7">(x100股)</span></th>
-                <th>提前平倉每口付回<br/><span class="text-muted fs-7">(Debit)</span></th>
-                <th>收租和付回差價<br/><span class="text-muted fs-7">(每口)</span></th>
-                <th>提前平倉每口<br/>平均損益<br/><span class="text-muted fs-7">(x100股)</span></th>
-                <th>提前平倉總損益<br/><span class="text-muted fs-7">(x100股)</span></th>
+                <th>建倉時每口平均收租<br/><span class="fs-7 color-credit">(Credit)</span></th>
+                <th>該筆總收租金額<br/><span class="fs-7 color-credit">(x100股)</span></th>
+                <th>提前平倉每口平均付回<br/><span class="fs-7 color-debit">(Debit)</span></th>
+                <th>收租和付回差價</th>
+                <th>提前平倉付回總付出金額<br/><span class="fs-7 color-debit">(x100股)</span></th>
+                <th>提前平倉每口最後平均損益<br/><span class="fs-7 text-muted">(x100股)</span></th>
+                <th>提前平倉最後總損益<br/><span class="fs-7 text-muted">(x100股)</span></th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -220,44 +221,57 @@
                 </td>
                 <td>{{ trade.contracts }}</td>
                 
-                <!-- 錢流入：綠色 -->
-                <td class="text-success">+${{ Number(trade.entry_price).toFixed(2) }}</td>
-                <td class="text-success fw-bold">+${{ (trade.entry_price * 100 * trade.contracts).toFixed(2) }}</td>
+                <!-- 1. 建倉時每口平均收租(Credit)：藍綠色 (+號) -->
+                <td :class="getNumberColorClass(trade.entry_price, 'credit')">
+                  {{ trade.entry_price === 0 ? '$0.00' : '+$' + Number(trade.entry_price).toFixed(2) }}
+                </td>
+
+                <!-- 2. 該筆總收租金額(x100股)：藍綠色 (+號) -->
+                <td :class="getNumberColorClass(trade.entry_price * 100 * trade.contracts, 'credit')" class="fw-bold">
+                  {{ (trade.entry_price * 100 * trade.contracts) === 0 ? '$0.00' : '+$' + (trade.entry_price * 100 * trade.contracts).toFixed(2) }}
+                </td>
                 
-                <!-- 錢流出：紅色 + 負號 -->
+                <!-- 3. 提前平倉每口平均付回(Debit)：橘黃色 (-號) -->
                 <td>
-                  <span v-if="getExitSummary(trade).hasExit" class="text-danger">
-                    -${{ getExitSummary(trade).avgDebit.toFixed(2) }}
+                  <span v-if="getExitSummary(trade).hasExit" :class="getNumberColorClass(getExitSummary(trade).avgDebit, 'debit')">
+                    {{ getExitSummary(trade).avgDebit === 0 ? '$0.00' : '-$' + getExitSummary(trade).avgDebit.toFixed(2) }}
                     <span v-if="getExitSummary(trade).isMultiple" class="text-muted fs-7">(平均)</span>
                   </span>
                   <span v-else class="text-muted">-</span>
                 </td>
 
-                <!-- 每口差價 -->
+                <!-- 4. 收租和付回差價：黃/綠/紅 (依正負零) -->
                 <td>
-                  <span v-if="getExitSummary(trade).hasExit" class="fw-bold" :class="getPriceDiff(trade) >= 0 ? 'text-success' : 'text-danger'">
-                    {{ getPriceDiff(trade) >= 0 ? '+' : '-' }}${{ Math.abs(getPriceDiff(trade)).toFixed(2) }}
+                  <span v-if="getExitSummary(trade).hasExit" class="fw-bold" :class="getPnlColorClass(getPriceDiff(trade))">
+                    {{ getPriceDiff(trade) === 0 ? '$0.00' : (getPriceDiff(trade) > 0 ? '+' : '-') + '$' + Math.abs(getPriceDiff(trade)).toFixed(2) }}
                   </span>
                   <span v-else class="text-muted">-</span>
                 </td>
 
-                <!-- 每口平均損益 -->
+                <!-- 5. 提前平倉付回總付出金額(x100股)：橘黃色 (-號) -->
                 <td>
-                  <span v-if="getExitSummary(trade).hasExit" class="fw-bold" :class="getExitPnlPerContract(trade) >= 0 ? 'text-success' : 'text-danger'">
-                    {{ getExitPnlPerContract(trade) >= 0 ? '+' : '-' }}${{ Math.abs(getExitPnlPerContract(trade)).toFixed(2) }}
+                  <span v-if="getExitSummary(trade).hasExit" class="fw-bold" :class="getNumberColorClass(getExitSummary(trade).totalDebitDollars, 'debit')">
+                    {{ getExitSummary(trade).totalDebitDollars === 0 ? '$0.00' : '-$' + getExitSummary(trade).totalDebitDollars.toFixed(2) }}
                   </span>
                   <span v-else class="text-muted">-</span>
                 </td>
 
-                <!-- 提前平倉總損益 -->
+                <!-- 6. 提前平倉每口最後平均損益(x100股)：黃/綠/紅 (依正負零) -->
                 <td>
-                  <span v-if="getExitSummary(trade).hasExit" class="fw-bold fs-6" :class="trade.pnl >= 0 ? 'text-success' : 'text-danger'">
-                    {{ trade.pnl >= 0 ? '+' : '-' }}${{ Math.abs(trade.pnl).toFixed(2) }}
+                  <span v-if="getExitSummary(trade).hasExit" class="fw-bold" :class="getPnlColorClass(getExitPnlPerContract(trade))">
+                    {{ getExitPnlPerContract(trade) === 0 ? '$0.00' : (getExitPnlPerContract(trade) > 0 ? '+' : '-') + '$' + Math.abs(getExitPnlPerContract(trade)).toFixed(2) }}
+                  </span>
+                  <span v-else class="text-muted">-</span>
+                </td>
+
+                <!-- 7. 提前平倉最後總損益(x100股)：黃/綠/紅 (依正負零) -->
+                <td>
+                  <span v-if="getExitSummary(trade).hasExit" class="fw-bold fs-6" :class="getPnlColorClass(trade.pnl)">
+                    {{ trade.pnl === 0 ? '$0.00' : (trade.pnl > 0 ? '+' : '-') + '$' + Math.abs(trade.pnl).toFixed(2) }}
                   </span>
                   <span v-else class="text-muted">-</span>
                 </td>
                 
-                <!-- 操作按鈕 -->
                 <td>
                   <div class="d-flex gap-2">
                     <button class="action-icon-btn" @click="openPayoffChart(trade)" title="預覽到期圖">📊</button>
@@ -272,7 +286,7 @@
       </div>
     </div>
 
-    <!-- 模式二專用：彈出式無縫編輯表單 Modal -->
+    <!-- Modal 編輯表單 -->
     <div v-if="isEditing && viewMode === 'summary'" class="chart-modal-overlay" @click.self="cancelEdit">
       <div class="form-modal-content">
         <div class="chart-modal-header border-bottom border-secondary pb-3 mb-3 d-flex justify-content-between align-items-center">
@@ -366,7 +380,7 @@ const TradeForm = {
           <input type="number" min="1" v-model.number="form.contracts" required class="dark-input" />
         </div>
         <div class="form-group flex-fill">
-          <label class="text-success">建倉時每口收租 (Credit)</label>
+          <label class="color-credit">建倉時每口平均收租 (Credit)</label>
           <input type="number" step="0.01" v-model.number="form.entryPrice" required class="dark-input" />
         </div>
       </div>
@@ -380,7 +394,7 @@ const TradeForm = {
         </div>
 
         <div v-if="form.strategy !== 'ironCondor'">
-          <label class="text-warning mb-2 d-block">每口平倉付回 (Debit) 與 口數</label>
+          <label class="color-debit mb-2 d-block">提前平倉每口付回 (Debit) 與 口數</label>
           <div v-for="(fill, idx) in form.strikes.exitFillsSingle" :key="'sing-'+idx" class="d-flex gap-2 mb-2 align-items-center">
             <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位 (歸零填 0)" />
             <span class="text-muted">x</span>
@@ -392,7 +406,7 @@ const TradeForm = {
 
         <div class="strikes-grid" v-if="form.strategy === 'ironCondor'">
           <div>
-            <label class="text-warning mb-2 d-block">Put 邊平倉付回與口數</label>
+            <label class="color-debit mb-2 d-block">Put 邊平倉付回與口數</label>
             <div v-for="(fill, idx) in form.strikes.exitFillsPut" :key="'put-'+idx" class="d-flex gap-2 mb-2 align-items-center">
               <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位" />
               <span class="text-muted">x</span>
@@ -403,7 +417,7 @@ const TradeForm = {
           </div>
           
           <div>
-            <label class="text-warning mb-2 d-block">Call 邊平倉付回與口數</label>
+            <label class="color-debit mb-2 d-block">Call 邊平倉付回與口數</label>
             <div v-for="(fill, idx) in form.strikes.exitFillsCall" :key="'call-'+idx" class="d-flex gap-2 mb-2 align-items-center">
               <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位" />
               <span class="text-muted">x</span>
@@ -419,42 +433,42 @@ const TradeForm = {
         <h5 class="calc-title mb-3">💡 交易試算預覽</h5>
         <div class="d-flex justify-content-between mb-2">
           <span class="text-muted">到期最大收益 (總計 / 每口):</span>
-          <span class="text-success fw-bold">+\${{ formStats.maxProfit.toFixed(2) }} <span class="fs-7 text-muted">(+\${{ formStats.perContractProfit.toFixed(2) }})</span></span>
+          <span class="color-profit fw-bold">+\${{ formStats.maxProfit.toFixed(2) }} <span class="fs-7 text-muted">(+\${{ formStats.perContractProfit.toFixed(2) }})</span></span>
         </div>
         <div class="d-flex justify-content-between mb-2">
           <span class="text-muted">到期最大虧損 (總計 / 每口):</span>
-          <span class="text-danger fw-bold">-\${{ formStats.maxLoss.toFixed(2) }} <span class="fs-7 text-muted">(-\${{ formStats.perContractLoss.toFixed(2) }})</span></span>
+          <span class="color-loss fw-bold">-\${{ formStats.maxLoss.toFixed(2) }} <span class="fs-7 text-muted">(-\${{ formStats.perContractLoss.toFixed(2) }})</span></span>
         </div>
         
         <div v-if="formStats.exitDetails" class="pt-2 mt-2 border-top border-secondary">
           <div class="text-white mb-2 fw-bold">👉 平倉實際損益拆解：</div>
-          <div class="d-flex justify-content-between fs-7 mb-1 text-success">
+          <div class="d-flex justify-content-between fs-7 mb-1 color-credit">
             <span>➕ 建倉總收租:</span><span>+\${{ formStats.maxProfit.toFixed(2) }}</span>
           </div>
           
           <template v-if="form.strategy === 'ironCondor'">
-            <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="formStats.exitDetails.putDebit > 0">
+            <div class="d-flex justify-content-between fs-7 mb-1 color-debit" v-if="formStats.exitDetails.putDebit > 0">
               <span>➖ Put 邊總付回:</span><span>-\${{ formStats.exitDetails.putDebit.toFixed(2) }}</span>
             </div>
-            <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="formStats.exitDetails.callDebit > 0">
+            <div class="d-flex justify-content-between fs-7 mb-1 color-debit" v-if="formStats.exitDetails.callDebit > 0">
               <span>➖ Call 邊總付回:</span><span>-\${{ formStats.exitDetails.callDebit.toFixed(2) }}</span>
             </div>
           </template>
           <template v-else>
-            <div class="d-flex justify-content-between fs-7 mb-1 text-danger">
-              <span>➖ 平倉總付回:</span><span>-\${{ formStats.exitDetails.totalDebitDollars.toFixed(2) }}</span>
+            <div class="d-flex justify-content-between fs-7 mb-1 color-debit">
+              <span>➖ 提前平倉付回總付出金額:</span><span>-\${{ formStats.exitDetails.totalDebitDollars.toFixed(2) }}</span>
             </div>
           </template>
 
           <div class="d-flex justify-content-between fs-7 mt-2 pt-2 border-top border-secondary">
-             <span class="text-muted">平均每口平倉付回 (Avg Debit):</span>
-             <span class="text-danger">-\${{ formStats.exitDetails.avgDebit.toFixed(2) }}</span>
+             <span class="text-muted">提前平倉每口平均付回 (Debit):</span>
+             <span class="color-debit">-\${{ formStats.exitDetails.avgDebit.toFixed(2) }}</span>
           </div>
 
           <div class="d-flex justify-content-between mt-2 pt-2 border-top border-secondary">
-            <span class="text-white fw-bold">提前平倉總損益 (x100股):</span>
-            <span class="fw-bold fs-5" :class="formStats.exitDetails.pnl >= 0 ? 'text-success' : 'text-danger'">
-              {{ formStats.exitDetails.pnl >= 0 ? '+' : '-' }}\${{ Math.abs(formStats.exitDetails.pnl).toFixed(2) }}
+            <span class="text-white fw-bold">提前平倉最後總損益 (x100股):</span>
+            <span class="fw-bold fs-5" :class="formStats.exitDetails.pnl === 0 ? 'color-zero' : (formStats.exitDetails.pnl > 0 ? 'color-profit' : 'color-loss')">
+              {{ formStats.exitDetails.pnl === 0 ? '$0.00' : (formStats.exitDetails.pnl > 0 ? '+' : '-') + '$' + Math.abs(formStats.exitDetails.pnl).toFixed(2) }}
             </span>
           </div>
         </div>
@@ -496,6 +510,19 @@ const isSelectedDate = (day) => day === selectedDay.value;
 const isToday = (day) => {
   const today = new Date();
   return day === today.getDate() && currentMonth.value === today.getMonth() && currentYear.value === today.getFullYear();
+};
+
+// 🔥 色彩判斷輔助函式
+const getNumberColorClass = (val, type) => {
+  if (val === 0 || Math.abs(val) < 0.0001) return 'color-zero';
+  if (type === 'credit') return 'color-credit';
+  if (type === 'debit') return 'color-debit';
+  return val > 0 ? 'color-profit' : 'color-loss';
+};
+
+const getPnlColorClass = (val) => {
+  if (val === 0 || Math.abs(val) < 0.0001) return 'color-zero';
+  return val > 0 ? 'color-profit' : 'color-loss';
 };
 
 const allTrades = ref([]);
@@ -680,7 +707,7 @@ const formStats = computed(() => {
      exitDetails = {
          ...summary,
          pnl,
-         statusText: '提前平倉總損益:'
+         statusText: '提前平倉最後總損益 (x100股):'
      };
   }
 
@@ -1015,11 +1042,19 @@ const renderPayoffChart = (trade) => {
 .trade-card { background-color: #2a2e39; border-left: 4px solid #8c8f98; padding: 16px; border-radius: 6px; margin-bottom: 12px; }
 .trade-card.open { border-color: #e0ac00; }
 .trade-card.win { border-color: #26a69a; }
+.trade-card.zero { border-color: #e0ac00; }
 .trade-card.loss { border-color: #ef5350; }
 .trade-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .strategy-badge { background-color: #1e222d; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; color: #8c8f98; }
 .trade-detail { font-size: 0.9rem; color: #b2b5be; margin-bottom: 6px; word-break: break-all; }
 .strikes-detail { background-color: #131722; padding: 8px; border-radius: 4px; margin: 8px 0; border-left: 3px solid #2962ff; }
+
+/* 🌟 五色色彩系統 CSS 類別 */
+.color-credit { color: #00bcd4 !important; } /* 🩵 現金流入 (Credit) */
+.color-debit { color: #ff9800 !important; }  /* 🟠 現金流出 (Debit) */
+.color-zero { color: #e0ac00 !important; font-weight: bold; } /* 💛 零值 (Zero) */
+.color-profit { color: #26a69a !important; } /* 🟩 淨利 (> 0) */
+.color-loss { color: #ef5350 !important; }   /* 🟥 淨虧 (< 0) */
 
 .risk-box { background: rgba(0,0,0,0.25); padding: 10px; border-radius: 4px; border: 1px solid #434651; }
 .fs-7 { font-size: 0.8rem; }
@@ -1038,7 +1073,6 @@ const renderPayoffChart = (trade) => {
 .strikes-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .strikes-grid-4 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-/* 動態批次新增按鈕樣式 */
 .btn-add-fill { background: rgba(38, 166, 154, 0.1); color: #26a69a; border: 1px dashed #26a69a; border-radius: 4px; padding: 6px 12px; font-size: 0.8rem; cursor: pointer; transition: 0.2s; }
 .btn-add-fill:hover { background: rgba(38, 166, 154, 0.2); }
 
@@ -1054,7 +1088,7 @@ const renderPayoffChart = (trade) => {
 .summary-stats { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .stat-item { background-color: #131722; padding: 12px; border-radius: 6px; border: 1px solid #434651; font-size: 1.1rem; font-weight: bold; }
 .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.summary-table { width: 100%; min-width: 1050px; border-collapse: collapse; text-align: left; }
+.summary-table { width: 100%; min-width: 1100px; border-collapse: collapse; text-align: left; }
 .summary-table th { color: #8c8f98; border-bottom: 1px solid #2b2b43; padding: 12px 8px; font-size: 0.85rem; }
 .summary-table td { padding: 12px 8px; border-bottom: 1px solid #2b2b43; color: #d1d4dc; font-size: 0.9rem; }
 .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; }
