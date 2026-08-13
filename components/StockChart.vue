@@ -87,10 +87,10 @@
     <div class="prob-wrapper" v-if="probStats && !loading && !error">
       <h3 class="prob-title">🎯 歷史波段目標觸及機率 (基於目前查詢區間)</h3>
       
-      <!-- 🔥 新增：白話文解說面板 -->
+      <!-- 白話文解說面板 -->
       <div class="prob-explanation">
         <h5 class="fw-bold text-info mb-2">💡 我該如何解讀這張表？</h5>
-        <p class="mb-2">這張表是量化交易的<strong>「歷史回測勝率」</strong>。系統將所選歷史區間內的<strong>每一天</strong>都當作買進點，統計在接下來的 1 到 3 週內，最高價或最低價是否曾經碰到對應的漲跌幅。</p>
+        <p class="mb-2">這張表是量化交易的<strong>「歷史回測勝率」</strong>。系統將所選歷史區間內的<strong>每一天</strong>都當作買進點，統計在接下來的 1 到 5 週內，最高價或最低價是否曾經碰到對應的漲跌幅。</p>
         <div class="highlight-text">
           <strong>實戰應用 (若您在今日或昨日收盤買入)：</strong><br>
           請把下方的機率當作您<strong>「現在進場的預期勝率」</strong>。例如：若「一週內 +5%」的機率為 22%，代表歷史數據告訴您，現在買進後能在一週內快速獲利 5% 的機會約為兩成。<br>
@@ -109,6 +109,8 @@
                 <th>一週內 (5T)</th>
                 <th>兩週內 (10T)</th>
                 <th>三週內 (15T)</th>
+                <th>四週內 (20T)</th>
+                <th>五週內 (25T)</th>
               </tr>
             </thead>
             <tbody>
@@ -117,6 +119,8 @@
                 <td>{{ probStats.results.rise[t][0] }}%</td>
                 <td>{{ probStats.results.rise[t][1] }}%</td>
                 <td>{{ probStats.results.rise[t][2] }}%</td>
+                <td>{{ probStats.results.rise[t][3] }}%</td>
+                <td>{{ probStats.results.rise[t][4] }}%</td>
               </tr>
             </tbody>
           </table>
@@ -132,6 +136,8 @@
                 <th>一週內 (5T)</th>
                 <th>兩週內 (10T)</th>
                 <th>三週內 (15T)</th>
+                <th>四週內 (20T)</th>
+                <th>五週內 (25T)</th>
               </tr>
             </thead>
             <tbody>
@@ -140,6 +146,8 @@
                 <td>{{ probStats.results.fall[t][0] }}%</td>
                 <td>{{ probStats.results.fall[t][1] }}%</td>
                 <td>{{ probStats.results.fall[t][2] }}%</td>
+                <td>{{ probStats.results.fall[t][3] }}%</td>
+                <td>{{ probStats.results.fall[t][4] }}%</td>
               </tr>
             </tbody>
           </table>
@@ -250,16 +258,18 @@ const calculateStats = (dates, kLineValues) => {
 };
 
 const calculateProbabilities = (kLineValues) => {
-  const horizons = [5, 10, 15]; 
-  const thresholds = [5, 10, 15, 20, 25, 30];
+  // 🔥 新增：四週(20)、五週(25)
+  const horizons = [5, 10, 15, 20, 25]; 
+  // 🔥 新增：1%, 3%, 7%
+  const thresholds = [1, 3, 5, 7, 10, 15, 20, 25, 30];
 
   let results = { rise: {}, fall: {} };
   thresholds.forEach(t => {
-    results.rise[t] = [0, 0, 0];
-    results.fall[t] = [0, 0, 0];
+    results.rise[t] = [0, 0, 0, 0, 0];
+    results.fall[t] = [0, 0, 0, 0, 0];
   });
 
-  let totalCounts = [0, 0, 0];
+  let totalCounts = [0, 0, 0, 0, 0];
 
   for (let i = 0; i < kLineValues.length; i++) {
     const currentClose = kLineValues[i][1]; 
@@ -289,7 +299,8 @@ const calculateProbabilities = (kLineValues) => {
   }
 
   thresholds.forEach(t => {
-    for (let hIndex = 0; hIndex < 3; hIndex++) {
+    // 配合時間軸數量擴增為 5
+    for (let hIndex = 0; hIndex < 5; hIndex++) {
        const total = totalCounts[hIndex];
        results.rise[t][hIndex] = total > 0 ? ((results.rise[t][hIndex] / total) * 100).toFixed(1) : 0;
        results.fall[t][hIndex] = total > 0 ? ((results.fall[t][hIndex] / total) * 100).toFixed(1) : 0;
@@ -528,14 +539,14 @@ onUnmounted(() => {
 .text-success { color: #26a69a; }
 .text-danger { color: #ef5350; }
 
-/* 🔥 機率統計區域樣式 */
+/* 機率統計區域樣式 */
 .prob-wrapper {
   background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px;
   padding: 20px; margin-bottom: 24px;
 }
 .prob-title { margin-top: 0; margin-bottom: 12px; font-size: 1.2rem; color: #fff; }
 
-/* 🔥 說明面板樣式 */
+/* 說明面板樣式 */
 .prob-explanation {
   background-color: rgba(38, 166, 154, 0.05);
   border-left: 4px solid #26a69a;
@@ -556,9 +567,11 @@ onUnmounted(() => {
 
 .prob-tables { display: flex; gap: 16px; }
 @media (max-width: 992px) { .prob-tables { flex-direction: column; } }
-.prob-card { flex: 1; background-color: #2a2e39; border-radius: 6px; overflow: hidden; }
+/* 加入 overflow-x: auto 確保五欄數據在小螢幕上可以滾動 */
+.prob-card { flex: 1; background-color: #2a2e39; border-radius: 6px; overflow-x: auto; }
 .prob-header { padding: 12px 16px; font-weight: bold; background-color: rgba(0,0,0,0.2); }
-.prob-table { width: 100%; border-collapse: collapse; text-align: right; }
+/* 加入 white-space: nowrap 防止表格內容被過度擠壓換行 */
+.prob-table { width: 100%; border-collapse: collapse; text-align: right; white-space: nowrap; }
 .prob-table th, .prob-table td { padding: 10px 16px; border-bottom: 1px solid #1e222d; }
 .prob-table th { color: #8c8f98; font-weight: 500; text-align: right; }
 .prob-table tbody tr:last-child td { border-bottom: none; }
