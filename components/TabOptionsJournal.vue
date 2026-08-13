@@ -98,35 +98,35 @@
 
               <div class="trade-detail">口數: {{ trade.contracts }}</div>
               <div class="trade-detail text-success" v-if="trade.entry_price !== null">
-                建倉時每口收租 (Credit): ${{ Number(trade.entry_price).toFixed(2) }}
+                建倉時每口收租 (Credit): +${{ Number(trade.entry_price).toFixed(2) }}
               </div>
               
               <div class="risk-box mt-2 mb-2" v-if="trade.entry_price !== null">
                 <div class="d-flex justify-content-between mb-1 text-success fs-7">
                   <span>✅ 最大收益 (總計 / 每口):</span>
                   <span class="fw-bold">
-                    ${{ getTradeStats(trade).maxProfit.toFixed(2) }} 
-                    <span class="text-muted opacity-75">(${{ getTradeStats(trade).perContractProfit.toFixed(2) }})</span>
+                    +${{ getTradeStats(trade).maxProfit.toFixed(2) }} 
+                    <span class="text-muted opacity-75">(+${{ getTradeStats(trade).perContractProfit.toFixed(2) }})</span>
                   </span>
                 </div>
                 <div class="d-flex justify-content-between text-danger fs-7">
                   <span>❌ 最大虧損 (總計 / 每口):</span>
                   <span class="fw-bold">
-                    ${{ getTradeStats(trade).maxLoss.toFixed(2) }} 
-                    <span class="text-muted opacity-75">(${{ getTradeStats(trade).perContractLoss.toFixed(2) }})</span>
+                    -${{ getTradeStats(trade).maxLoss.toFixed(2) }} 
+                    <span class="text-muted opacity-75">(-${{ getTradeStats(trade).perContractLoss.toFixed(2) }})</span>
                   </span>
                 </div>
               </div>
 
-              <div class="trade-detail text-warning mt-2" v-if="getExitSummary(trade).hasExit">
-                平倉付出總額 (Debit): ${{ (getExitSummary(trade).totalDebitDollars / 100).toFixed(2) }}
-                <span class="text-muted fs-7 ml-2">(平均每口 ${{ getExitSummary(trade).avgDebit.toFixed(2) }})</span>
+              <div class="trade-detail text-danger mt-2" v-if="getExitSummary(trade).hasExit">
+                提前平倉付回總額 (Debit): -${{ (getExitSummary(trade).totalDebitDollars / 100).toFixed(2) }}
+                <span class="text-muted fs-7 ml-2">(平均每口 -${{ getExitSummary(trade).avgDebit.toFixed(2) }})</span>
               </div>
               
               <div class="trade-pnl mt-3 pt-2 border-top border-secondary fw-bold fs-6" v-if="trade.status === 'closed' || trade.pnl !== 0">
-                {{ trade.status === 'closed' ? '提前平倉總損益' : '未平倉暫時損益' }}: 
+                {{ trade.status === 'closed' ? '提前平倉總損益 (x100股)' : '未平倉暫時損益' }}: 
                 <span :class="trade.pnl >= 0 ? 'text-success' : 'text-danger'">
-                  {{ trade.pnl >= 0 ? '+' : '' }}${{ trade.pnl }}
+                  {{ trade.pnl >= 0 ? '+' : '-' }}${{ Math.abs(trade.pnl).toFixed(2) }}
                 </span>
               </div>
             </div>
@@ -144,171 +144,16 @@
         <h3 class="text-white mb-4 border-bottom border-secondary pb-2">
           {{ isEditing ? '✏️ 編輯交易' : '📝 新增交易' }} 
         </h3>
-        <!-- 表單渲染區塊 -->
+        <!-- 表單渲染區塊 (呼叫共用元件) -->
         <div class="trade-form-wrapper">
-          <form @submit.prevent="saveTrade" class="trade-form">
-            <div class="d-flex flex-wrap gap-3 mb-3">
-              <div class="form-group flex-fill mb-0">
-                <label>股票代號 (Ticker)</label>
-                <input type="text" v-model="form.ticker" required placeholder="例: SPY" class="dark-input" />
-              </div>
-              <div class="form-group flex-fill mb-0">
-                <label>建倉日期 (Open Date)</label>
-                <input type="date" v-model="form.date" required class="dark-input" />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>策略類型</label>
-              <select v-model="form.strategy" class="dark-input" @change="resetStrikes">
-                <option value="bullPut">📉 賣權多頭 (Bull Put Spread)</option>
-                <option value="bearCall">📈 買權空頭 (Bear Call Spread)</option>
-                <option value="ironCondor">🦅 鐵鷹 (Iron Condor)</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>到期日 (Expiration)</label>
-              <input type="date" v-model="form.expiry" required class="dark-input" />
-            </div>
-
-            <!-- 履約價區 -->
-            <div v-if="form.strategy === 'bullPut'" class="strikes-grid">
-              <div class="form-group">
-                <label class="text-danger">賣出 (Short) Put</label>
-                <input type="number" step="0.5" v-model.number="form.strikes.shortPut" required class="dark-input" />
-              </div>
-              <div class="form-group">
-                <label class="text-success">買入 (Long) Put</label>
-                <input type="number" step="0.5" v-model.number="form.strikes.longPut" required class="dark-input" />
-              </div>
-            </div>
-
-            <div v-if="form.strategy === 'bearCall'" class="strikes-grid">
-              <div class="form-group">
-                <label class="text-danger">賣出 (Short) Call</label>
-                <input type="number" step="0.5" v-model.number="form.strikes.shortCall" required class="dark-input" />
-              </div>
-              <div class="form-group">
-                <label class="text-success">買入 (Long) Call</label>
-                <input type="number" step="0.5" v-model.number="form.strikes.longCall" required class="dark-input" />
-              </div>
-            </div>
-
-            <div v-if="form.strategy === 'ironCondor'" class="strikes-grid-4">
-              <div class="form-group"><label class="text-success">買入 Put</label><input type="number" step="0.5" v-model.number="form.strikes.longPut" required class="dark-input" /></div>
-              <div class="form-group"><label class="text-danger">賣出 Put</label><input type="number" step="0.5" v-model.number="form.strikes.shortPut" required class="dark-input" /></div>
-              <div class="form-group"><label class="text-danger">賣出 Call</label><input type="number" step="0.5" v-model.number="form.strikes.shortCall" required class="dark-input" /></div>
-              <div class="form-group"><label class="text-success">買入 Call</label><input type="number" step="0.5" v-model.number="form.strikes.longCall" required class="dark-input" /></div>
-            </div>
-
-            <div class="d-flex flex-wrap gap-3">
-              <div class="form-group flex-fill">
-                <label>總口數 (Contracts)</label>
-                <input type="number" min="1" v-model.number="form.contracts" required class="dark-input" />
-              </div>
-              <div class="form-group flex-fill">
-                <label class="text-success">建倉時每口收租 (Credit)</label>
-                <input type="number" step="0.01" v-model.number="form.entryPrice" required class="dark-input" />
-              </div>
-            </div>
-
-            <!-- 多重批次動態平倉紀錄區 -->
-            <div class="border-top border-secondary pt-3 mt-2">
-              <h5 class="text-warning mb-3">🚪 平倉紀錄區 (未平倉請留空)</h5>
-              
-              <div class="form-group">
-                <label class="text-warning">平倉日期 (Close Date)</label>
-                <input type="date" v-model="form.exitDate" class="dark-input" />
-              </div>
-
-              <div v-if="form.strategy !== 'ironCondor'">
-                <label class="text-warning mb-2 d-block">每口平倉付出 (Debit) 與 口數</label>
-                <div v-for="(fill, idx) in form.strikes.exitFillsSingle" :key="'sing-'+idx" class="d-flex gap-2 mb-2 align-items-center">
-                  <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位 (歸零填 0)" />
-                  <span class="text-muted">x</span>
-                  <input type="number" min="1" v-model.number="fill.contracts" class="dark-input" style="width: 80px" placeholder="口數" />
-                  <button type="button" class="btn-icon text-danger" v-if="form.strikes.exitFillsSingle.length > 1" @click="form.strikes.exitFillsSingle.splice(idx, 1)">✖</button>
-                </div>
-                <button type="button" class="btn-add-fill" @click="form.strikes.exitFillsSingle.push({price: null, contracts: 1})">➕ 新增平倉批次</button>
-              </div>
-
-              <div class="strikes-grid" v-if="form.strategy === 'ironCondor'">
-                <div>
-                  <label class="text-warning mb-2 d-block">Put 邊平倉付出與口數</label>
-                  <div v-for="(fill, idx) in form.strikes.exitFillsPut" :key="'put-'+idx" class="d-flex gap-2 mb-2 align-items-center">
-                    <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位" />
-                    <span class="text-muted">x</span>
-                    <input type="number" min="1" v-model.number="fill.contracts" class="dark-input" style="width: 80px" placeholder="口數" />
-                    <button type="button" class="btn-icon text-danger" v-if="form.strikes.exitFillsPut.length > 1" @click="form.strikes.exitFillsPut.splice(idx, 1)">✖</button>
-                  </div>
-                  <button type="button" class="btn-add-fill" @click="form.strikes.exitFillsPut.push({price: null, contracts: 1})">➕ 新增批次</button>
-                </div>
-                
-                <div>
-                  <label class="text-warning mb-2 d-block">Call 邊平倉付出與口數</label>
-                  <div v-for="(fill, idx) in form.strikes.exitFillsCall" :key="'call-'+idx" class="d-flex gap-2 mb-2 align-items-center">
-                    <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位" />
-                    <span class="text-muted">x</span>
-                    <input type="number" min="1" v-model.number="fill.contracts" class="dark-input" style="width: 80px" placeholder="口數" />
-                    <button type="button" class="btn-icon text-danger" v-if="form.strikes.exitFillsCall.length > 1" @click="form.strikes.exitFillsCall.splice(idx, 1)">✖</button>
-                  </div>
-                  <button type="button" class="btn-add-fill" @click="form.strikes.exitFillsCall.push({price: null, contracts: 1})">➕ 新增批次</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- 試算預覽面板 -->
-            <div class="calc-preview mt-4" v-if="formStats">
-              <h5 class="calc-title mb-3">💡 交易試算預覽</h5>
-              <div class="d-flex justify-content-between mb-2">
-                <span class="text-muted">到期最大收益 (總計 / 每口):</span>
-                <span class="text-success fw-bold">${{ formStats.maxProfit.toFixed(2) }} <span class="fs-7 text-muted">(${{ formStats.perContractProfit.toFixed(2) }})</span></span>
-              </div>
-              <div class="d-flex justify-content-between mb-2">
-                <span class="text-muted">到期最大虧損 (總計 / 每口):</span>
-                <span class="text-danger fw-bold">${{ formStats.maxLoss.toFixed(2) }} <span class="fs-7 text-muted">(${{ formStats.perContractLoss.toFixed(2) }})</span></span>
-              </div>
-              
-              <div v-if="formStats.exitDetails" class="pt-2 mt-2 border-top border-secondary">
-                <div class="text-white mb-2 fw-bold">👉 平倉實際損益拆解：</div>
-                <div class="d-flex justify-content-between fs-7 mb-1 text-success">
-                  <span>➕ 建倉總收租:</span><span>${{ formStats.maxProfit.toFixed(2) }}</span>
-                </div>
-                
-                <template v-if="form.strategy === 'ironCondor'">
-                  <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="formStats.exitDetails.putDebit > 0">
-                    <span>➖ Put 邊總支出:</span><span>-${{ formStats.exitDetails.putDebit.toFixed(2) }}</span>
-                  </div>
-                  <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="formStats.exitDetails.callDebit > 0">
-                    <span>➖ Call 邊總支出:</span><span>-${{ formStats.exitDetails.callDebit.toFixed(2) }}</span>
-                  </div>
-                </template>
-                <template v-else>
-                  <div class="d-flex justify-content-between fs-7 mb-1 text-danger">
-                    <span>➖ 平倉總支出:</span><span>-${{ formStats.exitDetails.totalDebitDollars.toFixed(2) }}</span>
-                  </div>
-                </template>
-
-                <div class="d-flex justify-content-between fs-7 mt-2 pt-2 border-top border-secondary">
-                   <span class="text-muted">平均每口平倉付出 (Avg Debit):</span>
-                   <span class="text-warning">${{ formStats.exitDetails.avgDebit.toFixed(2) }}</span>
-                </div>
-
-                <div class="d-flex justify-content-between mt-2 pt-2 border-top border-secondary">
-                  <span class="text-white fw-bold">提前平倉總損益:</span>
-                  <span class="fw-bold fs-5" :class="formStats.exitDetails.pnl >= 0 ? 'text-success' : 'text-danger'">
-                    {{ formStats.exitDetails.pnl >= 0 ? '+' : '' }}${{ formStats.exitDetails.pnl.toFixed(2) }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-actions mt-4">
-              <button type="submit" class="submit-btn w-100">{{ isEditing ? '儲存紀錄' : '新增紀錄' }}</button>
-              <button type="button" v-if="isEditing" @click="cancelEdit" class="cancel-btn w-100 mt-2">取消編輯</button>
-            </div>
-          </form>
+          <TradeForm 
+            :form="form" 
+            :isEditing="isEditing" 
+            :formStats="formStats" 
+            @save="saveTrade" 
+            @cancel="cancelEdit" 
+            @reset-strikes="resetStrikes" 
+          />
         </div>
       </div>
     </div>
@@ -327,15 +172,15 @@
           <div class="summary-stats d-flex flex-wrap gap-2">
             <div class="stat-item text-success flex-fill">
               <div class="fs-7 opacity-75">✅ 該群組建倉總收租</div>
-              <div>${{ group.totalCredit.toFixed(2) }}</div>
+              <div>+${{ group.totalCredit.toFixed(2) }}</div>
             </div>
             <div class="stat-item text-info flex-fill">
               <div class="fs-7 opacity-75">⏳ 未平倉剩餘價值 (放至歸零)</div>
-              <div>${{ group.openCredit.toFixed(2) }}</div>
+              <div>+${{ group.openCredit.toFixed(2) }}</div>
             </div>
             <div class="stat-item flex-fill" :class="group.realizedPnL >= 0 ? 'text-success' : 'text-danger'">
               <div class="fs-7 opacity-75">🚪 已平倉實際損益 (含單邊)</div>
-              <div>{{ group.realizedPnL >= 0 ? '+' : '' }}${{ group.realizedPnL.toFixed(2) }}</div>
+              <div>{{ group.realizedPnL >= 0 ? '+' : '-' }}${{ Math.abs(group.realizedPnL).toFixed(2) }}</div>
             </div>
           </div>
         </div>
@@ -350,10 +195,11 @@
                 <th>履約價細節</th>
                 <th>口數</th>
                 <th>建倉時每口收租<br/><span class="text-muted fs-7">(Credit)</span></th>
-                <th>該筆總收租</th>
-                <th>提前平倉每口付出<br/><span class="text-muted fs-7">(Debit)</span></th>
-                <th>提前平倉每口<br/>平均損益</th>
-                <th>提前平倉總損益</th>
+                <th>該筆總收租<br/><span class="text-muted fs-7">(x100股)</span></th>
+                <th>提前平倉每口付回<br/><span class="text-muted fs-7">(Debit)</span></th>
+                <th>收租和付回差價<br/><span class="text-muted fs-7">(每口)</span></th>
+                <th>提前平倉每口<br/>平均損益<br/><span class="text-muted fs-7">(x100股)</span></th>
+                <th>提前平倉總損益<br/><span class="text-muted fs-7">(x100股)</span></th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -373,22 +219,32 @@
                   <span v-else>S:{{trade.strikes.short}}, L:{{trade.strikes.long}}</span>
                 </td>
                 <td>{{ trade.contracts }}</td>
-                <td class="text-success">${{ Number(trade.entry_price).toFixed(2) }}</td>
-                <td class="text-success fw-bold">${{ (trade.entry_price * 100 * trade.contracts).toFixed(2) }}</td>
                 
-                <!-- 提前平倉每口付出 (Debit) -->
+                <!-- 錢流入：綠色 -->
+                <td class="text-success">+${{ Number(trade.entry_price).toFixed(2) }}</td>
+                <td class="text-success fw-bold">+${{ (trade.entry_price * 100 * trade.contracts).toFixed(2) }}</td>
+                
+                <!-- 錢流出：紅色 + 負號 -->
                 <td>
-                  <span v-if="getExitSummary(trade).hasExit" class="text-warning">
-                    ${{ getExitSummary(trade).avgDebit.toFixed(2) }}
+                  <span v-if="getExitSummary(trade).hasExit" class="text-danger">
+                    -${{ getExitSummary(trade).avgDebit.toFixed(2) }}
                     <span v-if="getExitSummary(trade).isMultiple" class="text-muted fs-7">(平均)</span>
                   </span>
                   <span v-else class="text-muted">-</span>
                 </td>
 
-                <!-- 🔥 修正：提前平倉每口平均損益 -->
+                <!-- 每口差價 -->
+                <td>
+                  <span v-if="getExitSummary(trade).hasExit" class="fw-bold" :class="getPriceDiff(trade) >= 0 ? 'text-success' : 'text-danger'">
+                    {{ getPriceDiff(trade) >= 0 ? '+' : '-' }}${{ Math.abs(getPriceDiff(trade)).toFixed(2) }}
+                  </span>
+                  <span v-else class="text-muted">-</span>
+                </td>
+
+                <!-- 每口平均損益 -->
                 <td>
                   <span v-if="getExitSummary(trade).hasExit" class="fw-bold" :class="getExitPnlPerContract(trade) >= 0 ? 'text-success' : 'text-danger'">
-                    {{ getExitPnlPerContract(trade) >= 0 ? '+' : '' }}${{ Math.abs(getExitPnlPerContract(trade)).toFixed(2) }}
+                    {{ getExitPnlPerContract(trade) >= 0 ? '+' : '-' }}${{ Math.abs(getExitPnlPerContract(trade)).toFixed(2) }}
                   </span>
                   <span v-else class="text-muted">-</span>
                 </td>
@@ -396,11 +252,12 @@
                 <!-- 提前平倉總損益 -->
                 <td>
                   <span v-if="getExitSummary(trade).hasExit" class="fw-bold fs-6" :class="trade.pnl >= 0 ? 'text-success' : 'text-danger'">
-                    {{ trade.pnl >= 0 ? '+' : '' }}${{ trade.pnl.toFixed(2) }}
+                    {{ trade.pnl >= 0 ? '+' : '-' }}${{ Math.abs(trade.pnl).toFixed(2) }}
                   </span>
                   <span v-else class="text-muted">-</span>
                 </td>
                 
+                <!-- 操作按鈕 -->
                 <td>
                   <div class="d-flex gap-2">
                     <button class="action-icon-btn" @click="openPayoffChart(trade)" title="預覽到期圖">📊</button>
@@ -422,105 +279,14 @@
           <h4 class="m-0 fw-bold text-white">✏️ 編輯交易 / 登錄平倉</h4>
           <button class="close-btn" @click="cancelEdit">✖</button>
         </div>
-        
-        <form @submit.prevent="saveTrade" class="trade-form">
-          <div class="d-flex flex-wrap gap-3 mb-3">
-            <div class="form-group flex-fill mb-0">
-              <label>股票代號 (Ticker)</label>
-              <input type="text" v-model="form.ticker" required placeholder="例: SPY" class="dark-input" />
-            </div>
-            <div class="form-group flex-fill mb-0">
-              <label>建倉日期 (Open Date)</label>
-              <input type="date" v-model="form.date" required class="dark-input" />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>策略類型</label>
-            <select v-model="form.strategy" class="dark-input" @change="resetStrikes">
-              <option value="bullPut">📉 賣權多頭 (Bull Put Spread)</option>
-              <option value="bearCall">📈 買權空頭 (Bear Call Spread)</option>
-              <option value="ironCondor">🦅 鐵鷹 (Iron Condor)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>到期日 (Expiration)</label>
-            <input type="date" v-model="form.expiry" required class="dark-input" />
-          </div>
-
-          <div v-if="form.strategy === 'bullPut'" class="strikes-grid">
-            <div class="form-group"><label class="text-danger">賣出 (Short) Put</label><input type="number" step="0.5" v-model.number="form.strikes.shortPut" required class="dark-input" /></div>
-            <div class="form-group"><label class="text-success">買入 (Long) Put</label><input type="number" step="0.5" v-model.number="form.strikes.longPut" required class="dark-input" /></div>
-          </div>
-
-          <div v-if="form.strategy === 'bearCall'" class="strikes-grid">
-            <div class="form-group"><label class="text-danger">賣出 (Short) Call</label><input type="number" step="0.5" v-model.number="form.strikes.shortCall" required class="dark-input" /></div>
-            <div class="form-group"><label class="text-success">買入 (Long) Call</label><input type="number" step="0.5" v-model.number="form.strikes.longCall" required class="dark-input" /></div>
-          </div>
-
-          <div v-if="form.strategy === 'ironCondor'" class="strikes-grid-4">
-            <div class="form-group"><label class="text-success">買入 Put</label><input type="number" step="0.5" v-model.number="form.strikes.longPut" required class="dark-input" /></div>
-            <div class="form-group"><label class="text-danger">賣出 Put</label><input type="number" step="0.5" v-model.number="form.strikes.shortPut" required class="dark-input" /></div>
-            <div class="form-group"><label class="text-danger">賣出 Call</label><input type="number" step="0.5" v-model.number="form.strikes.shortCall" required class="dark-input" /></div>
-            <div class="form-group"><label class="text-success">買入 Call</label><input type="number" step="0.5" v-model.number="form.strikes.longCall" required class="dark-input" /></div>
-          </div>
-
-          <div class="d-flex flex-wrap gap-3">
-            <div class="form-group flex-fill"><label>總口數 (Contracts)</label><input type="number" min="1" v-model.number="form.contracts" required class="dark-input" /></div>
-            <div class="form-group flex-fill"><label class="text-success">建倉時每口收租 (Credit)</label><input type="number" step="0.01" v-model.number="form.entryPrice" required class="dark-input" /></div>
-          </div>
-
-          <!-- 多重批次動態平倉紀錄區 -->
-          <div class="border-top border-secondary pt-3 mt-2">
-            <h5 class="text-warning mb-3">🚪 平倉紀錄區 (未平倉請留空)</h5>
-            
-            <div class="form-group">
-              <label class="text-warning">平倉日期 (Close Date)</label>
-              <input type="date" v-model="form.exitDate" class="dark-input" />
-            </div>
-
-            <div v-if="form.strategy !== 'ironCondor'">
-              <label class="text-warning mb-2 d-block">每口平倉付出 (Debit) 與 口數</label>
-              <div v-for="(fill, idx) in form.strikes.exitFillsSingle" :key="'sing-m-'+idx" class="d-flex gap-2 mb-2 align-items-center">
-                <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位" />
-                <span class="text-muted">x</span>
-                <input type="number" min="1" v-model.number="fill.contracts" class="dark-input" style="width: 80px" placeholder="口數" />
-                <button type="button" class="btn-icon text-danger" v-if="form.strikes.exitFillsSingle.length > 1" @click="form.strikes.exitFillsSingle.splice(idx, 1)">✖</button>
-              </div>
-              <button type="button" class="btn-add-fill" @click="form.strikes.exitFillsSingle.push({price: null, contracts: 1})">➕ 新增平倉批次</button>
-            </div>
-
-            <div class="strikes-grid" v-if="form.strategy === 'ironCondor'">
-              <div>
-                <label class="text-warning mb-2 d-block">Put 邊平倉付出與口數</label>
-                <div v-for="(fill, idx) in form.strikes.exitFillsPut" :key="'put-m-'+idx" class="d-flex gap-2 mb-2 align-items-center">
-                  <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位" />
-                  <span class="text-muted">x</span>
-                  <input type="number" min="1" v-model.number="fill.contracts" class="dark-input" style="width: 80px" placeholder="口數" />
-                  <button type="button" class="btn-icon text-danger" v-if="form.strikes.exitFillsPut.length > 1" @click="form.strikes.exitFillsPut.splice(idx, 1)">✖</button>
-                </div>
-                <button type="button" class="btn-add-fill" @click="form.strikes.exitFillsPut.push({price: null, contracts: 1})">➕ 新增批次</button>
-              </div>
-              
-              <div>
-                <label class="text-warning mb-2 d-block">Call 邊平倉付出與口數</label>
-                <div v-for="(fill, idx) in form.strikes.exitFillsCall" :key="'call-m-'+idx" class="d-flex gap-2 mb-2 align-items-center">
-                  <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位" />
-                  <span class="text-muted">x</span>
-                  <input type="number" min="1" v-model.number="fill.contracts" class="dark-input" style="width: 80px" placeholder="口數" />
-                  <button type="button" class="btn-icon text-danger" v-if="form.strikes.exitFillsCall.length > 1" @click="form.strikes.exitFillsCall.splice(idx, 1)">✖</button>
-                </div>
-                <button type="button" class="btn-add-fill" @click="form.strikes.exitFillsCall.push({price: null, contracts: 1})">➕ 新增批次</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-actions mt-4">
-            <button type="submit" class="submit-btn w-100">儲存紀錄</button>
-            <button type="button" @click="cancelEdit" class="cancel-btn w-100 mt-2">取消</button>
-          </div>
-        </form>
+        <TradeForm 
+          :form="form" 
+          :isEditing="isEditing" 
+          :formStats="formStats" 
+          @save="saveTrade" 
+          @cancel="cancelEdit" 
+          @reset-strikes="resetStrikes" 
+        />
       </div>
     </div>
 
@@ -543,6 +309,164 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import * as echarts from 'echarts';
+
+// ==========================================
+// 共用表單元件 (TradeForm)
+// ==========================================
+const TradeForm = {
+  props: ['form', 'isEditing', 'formStats'],
+  emits: ['save', 'cancel', 'reset-strikes'],
+  template: `
+    <form @submit.prevent="$emit('save')" class="trade-form">
+      <div class="d-flex flex-wrap gap-3 mb-3">
+        <div class="form-group flex-fill mb-0">
+          <label>股票代號 (Ticker)</label>
+          <input type="text" v-model="form.ticker" required placeholder="例: SPY" class="dark-input" />
+        </div>
+        <div class="form-group flex-fill mb-0">
+          <label>建倉日期 (Open Date)</label>
+          <input type="date" v-model="form.date" required class="dark-input" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>策略類型</label>
+        <select v-model="form.strategy" class="dark-input" @change="$emit('reset-strikes')">
+          <option value="bullPut">📉 賣權多頭 (Bull Put Spread)</option>
+          <option value="bearCall">📈 買權空頭 (Bear Call Spread)</option>
+          <option value="ironCondor">🦅 鐵鷹 (Iron Condor)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>到期日 (Expiration)</label>
+        <input type="date" v-model="form.expiry" required class="dark-input" />
+      </div>
+
+      <div v-if="form.strategy === 'bullPut'" class="strikes-grid">
+        <div class="form-group"><label class="text-danger">賣出 (Short) Put</label><input type="number" step="0.5" v-model.number="form.strikes.shortPut" required class="dark-input" /></div>
+        <div class="form-group"><label class="text-success">買入 (Long) Put</label><input type="number" step="0.5" v-model.number="form.strikes.longPut" required class="dark-input" /></div>
+      </div>
+
+      <div v-if="form.strategy === 'bearCall'" class="strikes-grid">
+        <div class="form-group"><label class="text-danger">賣出 (Short) Call</label><input type="number" step="0.5" v-model.number="form.strikes.shortCall" required class="dark-input" /></div>
+        <div class="form-group"><label class="text-success">買入 (Long) Call</label><input type="number" step="0.5" v-model.number="form.strikes.longCall" required class="dark-input" /></div>
+      </div>
+
+      <div v-if="form.strategy === 'ironCondor'" class="strikes-grid-4">
+        <div class="form-group"><label class="text-success">買入 Put</label><input type="number" step="0.5" v-model.number="form.strikes.longPut" required class="dark-input" /></div>
+        <div class="form-group"><label class="text-danger">賣出 Put</label><input type="number" step="0.5" v-model.number="form.strikes.shortPut" required class="dark-input" /></div>
+        <div class="form-group"><label class="text-danger">賣出 Call</label><input type="number" step="0.5" v-model.number="form.strikes.shortCall" required class="dark-input" /></div>
+        <div class="form-group"><label class="text-success">買入 Call</label><input type="number" step="0.5" v-model.number="form.strikes.longCall" required class="dark-input" /></div>
+      </div>
+
+      <div class="d-flex flex-wrap gap-3">
+        <div class="form-group flex-fill">
+          <label>口數 (Contracts)</label>
+          <input type="number" min="1" v-model.number="form.contracts" required class="dark-input" />
+        </div>
+        <div class="form-group flex-fill">
+          <label class="text-success">建倉時每口收租 (Credit)</label>
+          <input type="number" step="0.01" v-model.number="form.entryPrice" required class="dark-input" />
+        </div>
+      </div>
+
+      <div class="border-top border-secondary pt-3 mt-2">
+        <h5 class="text-warning mb-3">🚪 平倉紀錄區 (未平倉請留空)</h5>
+        
+        <div class="form-group">
+          <label class="text-warning">平倉日期 (Close Date)</label>
+          <input type="date" v-model="form.exitDate" class="dark-input" />
+        </div>
+
+        <div v-if="form.strategy !== 'ironCondor'">
+          <label class="text-warning mb-2 d-block">每口平倉付回 (Debit) 與 口數</label>
+          <div v-for="(fill, idx) in form.strikes.exitFillsSingle" :key="'sing-'+idx" class="d-flex gap-2 mb-2 align-items-center">
+            <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位 (歸零填 0)" />
+            <span class="text-muted">x</span>
+            <input type="number" min="1" v-model.number="fill.contracts" class="dark-input" style="width: 80px" placeholder="口數" />
+            <button type="button" class="btn-icon text-danger" v-if="form.strikes.exitFillsSingle.length > 1" @click="form.strikes.exitFillsSingle.splice(idx, 1)">✖</button>
+          </div>
+          <button type="button" class="btn-add-fill" @click="form.strikes.exitFillsSingle.push({price: null, contracts: 1})">➕ 新增平倉批次</button>
+        </div>
+
+        <div class="strikes-grid" v-if="form.strategy === 'ironCondor'">
+          <div>
+            <label class="text-warning mb-2 d-block">Put 邊平倉付回與口數</label>
+            <div v-for="(fill, idx) in form.strikes.exitFillsPut" :key="'put-'+idx" class="d-flex gap-2 mb-2 align-items-center">
+              <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位" />
+              <span class="text-muted">x</span>
+              <input type="number" min="1" v-model.number="fill.contracts" class="dark-input" style="width: 80px" placeholder="口數" />
+              <button type="button" class="btn-icon text-danger" v-if="form.strikes.exitFillsPut.length > 1" @click="form.strikes.exitFillsPut.splice(idx, 1)">✖</button>
+            </div>
+            <button type="button" class="btn-add-fill" @click="form.strikes.exitFillsPut.push({price: null, contracts: 1})">➕ 新增批次</button>
+          </div>
+          
+          <div>
+            <label class="text-warning mb-2 d-block">Call 邊平倉付回與口數</label>
+            <div v-for="(fill, idx) in form.strikes.exitFillsCall" :key="'call-'+idx" class="d-flex gap-2 mb-2 align-items-center">
+              <input type="number" step="0.01" v-model.number="fill.price" class="dark-input flex-fill" placeholder="價位" />
+              <span class="text-muted">x</span>
+              <input type="number" min="1" v-model.number="fill.contracts" class="dark-input" style="width: 80px" placeholder="口數" />
+              <button type="button" class="btn-icon text-danger" v-if="form.strikes.exitFillsCall.length > 1" @click="form.strikes.exitFillsCall.splice(idx, 1)">✖</button>
+            </div>
+            <button type="button" class="btn-add-fill" @click="form.strikes.exitFillsCall.push({price: null, contracts: 1})">➕ 新增批次</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="calc-preview mt-4" v-if="formStats">
+        <h5 class="calc-title mb-3">💡 交易試算預覽</h5>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">到期最大收益 (總計 / 每口):</span>
+          <span class="text-success fw-bold">+\${{ formStats.maxProfit.toFixed(2) }} <span class="fs-7 text-muted">(+\${{ formStats.perContractProfit.toFixed(2) }})</span></span>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">到期最大虧損 (總計 / 每口):</span>
+          <span class="text-danger fw-bold">-\${{ formStats.maxLoss.toFixed(2) }} <span class="fs-7 text-muted">(-\${{ formStats.perContractLoss.toFixed(2) }})</span></span>
+        </div>
+        
+        <div v-if="formStats.exitDetails" class="pt-2 mt-2 border-top border-secondary">
+          <div class="text-white mb-2 fw-bold">👉 平倉實際損益拆解：</div>
+          <div class="d-flex justify-content-between fs-7 mb-1 text-success">
+            <span>➕ 建倉總收租:</span><span>+\${{ formStats.maxProfit.toFixed(2) }}</span>
+          </div>
+          
+          <template v-if="form.strategy === 'ironCondor'">
+            <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="formStats.exitDetails.putDebit > 0">
+              <span>➖ Put 邊總付回:</span><span>-\${{ formStats.exitDetails.putDebit.toFixed(2) }}</span>
+            </div>
+            <div class="d-flex justify-content-between fs-7 mb-1 text-danger" v-if="formStats.exitDetails.callDebit > 0">
+              <span>➖ Call 邊總付回:</span><span>-\${{ formStats.exitDetails.callDebit.toFixed(2) }}</span>
+            </div>
+          </template>
+          <template v-else>
+            <div class="d-flex justify-content-between fs-7 mb-1 text-danger">
+              <span>➖ 平倉總付回:</span><span>-\${{ formStats.exitDetails.totalDebitDollars.toFixed(2) }}</span>
+            </div>
+          </template>
+
+          <div class="d-flex justify-content-between fs-7 mt-2 pt-2 border-top border-secondary">
+             <span class="text-muted">平均每口平倉付回 (Avg Debit):</span>
+             <span class="text-danger">-\${{ formStats.exitDetails.avgDebit.toFixed(2) }}</span>
+          </div>
+
+          <div class="d-flex justify-content-between mt-2 pt-2 border-top border-secondary">
+            <span class="text-white fw-bold">提前平倉總損益 (x100股):</span>
+            <span class="fw-bold fs-5" :class="formStats.exitDetails.pnl >= 0 ? 'text-success' : 'text-danger'">
+              {{ formStats.exitDetails.pnl >= 0 ? '+' : '-' }}\${{ Math.abs(formStats.exitDetails.pnl).toFixed(2) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions mt-4">
+        <button type="submit" class="submit-btn w-100">{{ isEditing ? '儲存紀錄' : '新增紀錄' }}</button>
+        <button type="button" @click="$emit('cancel')" class="cancel-btn w-100 mt-2">取消</button>
+      </div>
+    </form>
+  `
+};
 
 const supabase = useSupabaseClient();
 const viewMode = ref('calendar');
@@ -589,7 +513,6 @@ const hasTradeOnDate = (day) => {
   return allTrades.value.some(t => t.date === checkDate);
 };
 
-// 🔥 統一多批次平倉計算函式
 const getExitSummary = (trade) => {
   if (trade.strategy === 'ironCondor') {
     let putDebit = 0, callDebit = 0, hasExit = false;
@@ -629,11 +552,14 @@ const getExitSummary = (trade) => {
   }
 };
 
-// 🔥 計算每口平均平倉損益
-const getExitPnlPerContract = (trade) => {
+const getPriceDiff = (trade) => {
   const entry = Number(trade.entry_price) || 0;
   const exitAvg = getExitSummary(trade).avgDebit || 0;
-  return (entry - exitAvg) * 100;
+  return entry - exitAvg;
+};
+
+const getExitPnlPerContract = (trade) => {
+  return getPriceDiff(trade) * 100;
 };
 
 const expirySummary = computed(() => {
