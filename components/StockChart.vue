@@ -11,7 +11,6 @@
           @keyup.enter="fetchData"
         />
         
-        <!-- 🔥 新增：K 線週期切換 -->
         <div class="toggle-switch timeframe-switch">
           <div class="slider" :class="timeframe"></div>
           <span :class="{ 'active': timeframe === 'daily' }" @click="timeframe = 'daily'">日 K</span>
@@ -45,7 +44,7 @@
       {{ error }}
     </div>
 
-    <!-- 四宮格統計數據 (動態標題) -->
+    <!-- 四宮格統計數據 -->
     <div class="stats-container" v-if="stats && !loading && !error">
       <div class="stat-box rise">
         <div class="stat-label">區間單{{ timeConfig.label }}最大漲幅</div>
@@ -69,7 +68,7 @@
       </div>
     </div>
 
-    <!-- 漲跌幅分佈統計塊 (動態標題) -->
+    <!-- 漲跌幅分佈統計塊 -->
     <div class="distribution-wrapper" v-if="stats && !loading && !error">
       <div class="dist-card rise-dist">
         <div class="dist-header">🚀 單{{ timeConfig.label }}漲幅超過 (發生次數)</div>
@@ -91,7 +90,6 @@
       </div>
     </div>
 
-    <!-- K線圖與成交量 -->
     <div class="chart-wrapper mb-4">
       <div id="us-stock-chart" ref="chartContainer" class="chart-container"></div>
     </div>
@@ -259,8 +257,7 @@ const ranges = [
   { label: '5 年', value: '5y' }
 ];
 
-// 🔥 K 線週期切換狀態
-const timeframe = ref('daily'); // 'daily', 'weekly', 'monthly'
+const timeframe = ref('daily');
 
 const loading = ref(false);
 const error = ref('');
@@ -278,12 +275,10 @@ const chartContainer = ref(null);
 let chartInstance = null;
 let resizeObserver = null;
 
-// 🔥 週期設定設定表：根據不同週期自動調整文字與回測參數
 const timeConfig = computed(() => {
   if (timeframe.value === 'daily') {
     return {
-      label: '日',
-      horizons: [5, 10, 15, 20, 25],
+      label: '日', horizons: [5, 10, 15, 20, 25],
       horizonLabels: ['一週內 (5T)', '兩週內 (10T)', '三週內 (15T)', '四週內 (20T)', '五週內 (25T)'],
       historySpans: [
         { label: '過去 1 年', periods: 252 }, { label: '過去 2 年', periods: 504 },
@@ -292,18 +287,16 @@ const timeConfig = computed(() => {
     };
   } else if (timeframe.value === 'weekly') {
     return {
-      label: '週',
-      horizons: [1, 2, 3, 4, 5],
+      label: '週', horizons: [1, 2, 3, 4, 5],
       horizonLabels: ['一週內 (1T)', '兩週內 (2T)', '三週內 (3T)', '四週內 (4T)', '五週內 (5T)'],
       historySpans: [
         { label: '過去 1 年', periods: 52 }, { label: '過去 2 年', periods: 104 },
         { label: '過去 3 年', periods: 156 }, { label: '過去 5 年', periods: 260 }
       ]
     };
-  } else { // monthly
+  } else { 
     return {
-      label: '月',
-      horizons: [1, 2, 3, 4, 5],
+      label: '月', horizons: [1, 2, 3, 4, 5],
       horizonLabels: ['一個月內 (1T)', '兩個月內 (2T)', '三個月內 (3T)', '四個月內 (4T)', '五個月內 (5T)'],
       historySpans: [
         { label: '過去 1 年', periods: 12 }, { label: '過去 2 年', periods: 24 },
@@ -313,7 +306,7 @@ const timeConfig = computed(() => {
   }
 });
 
-// 🔥 資料核心處理引擎：依照週期合併日K資料
+// 🔥 處理成交量與 K 線資料，加入容錯解析機制
 const processedData = computed(() => {
   if (!rawData.value || rawData.value.length === 0) return { dates: [], kLineValues: [], volumes: [] };
 
@@ -329,17 +322,20 @@ const processedData = computed(() => {
     if (timeframe.value === 'weekly') groupKey = getWeekKey(item.time);
     if (timeframe.value === 'monthly') groupKey = item.time.substring(0, 7);
 
+    // 支援各種 API 常見的 Volume 欄位大小寫
+    const itemVol = Number(item.volume !== undefined ? item.volume : (item.Volume !== undefined ? item.Volume : 0));
+
     if (!grouped[groupKey]) {
       grouped[groupKey] = {
         time: item.time, open: item.open, high: item.high, low: item.low, close: item.close,
-        volume: item.volume || 0, adjclose: item.adjclose
+        volume: itemVol, adjclose: item.adjclose
       };
     } else {
-      grouped[groupKey].time = item.time; // 取該週期最後一天的日期標示
+      grouped[groupKey].time = item.time; 
       grouped[groupKey].high = Math.max(grouped[groupKey].high, item.high);
       grouped[groupKey].low = Math.min(grouped[groupKey].low, item.low);
       grouped[groupKey].close = item.close; 
-      grouped[groupKey].volume += (item.volume || 0);
+      grouped[groupKey].volume += itemVol; // 加總成交量
       grouped[groupKey].adjclose = item.adjclose;
     }
   });
@@ -357,9 +353,12 @@ const processedData = computed(() => {
     }
     kLineValues.push([o, c, l, h]);
     
-    // 判斷該 K 棒漲跌以決定成交量顏色 (1=漲, -1=跌)
     const sign = c >= o ? 1 : -1;
-    volumes.push([index, item.volume, sign]);
+    // 將 Volume 組成標準 ECharts 物件，徹底解決顯示不出的問題
+    volumes.push({
+      value: item.volume,
+      itemStyle: { color: sign === 1 ? '#26a69a' : '#ef5350' }
+    });
   });
 
   return { dates, kLineValues, volumes };
@@ -374,7 +373,6 @@ const toggleAdjusted = () => {
   isAdjusted.value = !isAdjusted.value;
 };
 
-// 監聽處理後的資料改變，觸發畫面全部更新
 watch(processedData, (newVal) => {
   if (newVal.dates.length > 0) {
     renderChart(newVal.dates, newVal.kLineValues, newVal.volumes);
@@ -385,7 +383,6 @@ watch(processedData, (newVal) => {
   }
 });
 
-// 監聽履約價與策略變化，即時重算選擇權機率
 watch([optStrategy, optStrikes], () => {
   if (processedData.value.kLineValues.length > 0) {
     calculateOptionProbabilities(processedData.value.kLineValues);
@@ -431,7 +428,7 @@ const calculateStats = (dates, kLineValues) => {
 
 const calculateProbabilities = (kLineValues) => {
   const horizons = timeConfig.value.horizons; 
-  const thresholds = [1, 3, 5, 7, 10, 15, 20, 25, 30]; // 包含短線 1%, 3%, 7%
+  const thresholds = [1, 3, 5, 7, 10, 15, 20, 25, 30];
 
   let results = { rise: {}, fall: {} };
   thresholds.forEach(t => {
@@ -470,7 +467,7 @@ const calculateProbabilities = (kLineValues) => {
     }
   });
 
-  probStats.value = { results, thresholds };
+  probStats.value = { results, thresholds, horizons, totalCounts };
 };
 
 const calculateOptionProbabilities = (kLineValues) => {
@@ -480,7 +477,6 @@ const calculateOptionProbabilities = (kLineValues) => {
   const spPct = shortPut ? ((shortPut - latestPrice) / latestPrice) * 100 : null; 
   const scPct = shortCall ? ((shortCall - latestPrice) / latestPrice) * 100 : null; 
 
-  // 只取前三個觀察期 (例如一、二、三週內)
   const horizons = timeConfig.value.horizons.slice(0, 3); 
   const historySpans = timeConfig.value.historySpans;
 
@@ -564,10 +560,9 @@ const renderChart = (dates, kLineValues, volumes) => {
       axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } 
     },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
-    // 🔥 調整 Grid，切割為 K 線與成交量兩塊
     grid: [
-      { left: '5%', right: '5%', top: '5%', height: '65%' },
-      { left: '5%', right: '5%', top: '75%', height: '15%' }
+      { left: '5%', right: '5%', top: '5%', height: '60%' }, // K線區域
+      { left: '5%', right: '5%', top: '70%', height: '20%' }  // 成交量區域
     ],
     xAxis: [
       { type: 'category', data: dates, boundaryGap: false, axisLine: { lineStyle: { color: '#434651' } }, splitLine: { show: false }, axisLabel: { show: false } },
@@ -575,7 +570,7 @@ const renderChart = (dates, kLineValues, volumes) => {
     ],
     yAxis: [
       { scale: true, position: 'right', axisLine: { lineStyle: { color: '#434651' } }, axisLabel: { color: '#8c8f98' }, splitLine: { lineStyle: { color: '#2B2B43' } } },
-      { scale: true, gridIndex: 1, position: 'right', splitLine: { show: false }, axisLabel: { show: false } }
+      { type: 'value', gridIndex: 1, position: 'right', splitLine: { show: false }, axisLabel: { show: false }, min: 0 } // 成交量從 0 開始
     ],
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1], start: 0, end: 100 },
@@ -589,16 +584,12 @@ const renderChart = (dates, kLineValues, volumes) => {
         itemStyle: { color: '#26a69a', color0: '#ef5350', borderColor: '#26a69a', borderColor0: '#ef5350' },
         markLine: { symbol: ['none', 'none'], data: markLineData }
       },
-      // 🔥 新增：成交量長條圖
       {
         name: '成交量',
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: volumes,
-        itemStyle: {
-          color: (params) => params.data[2] === 1 ? '#26a69a' : '#ef5350'
-        }
+        data: volumes
       }
     ]
   };
@@ -659,7 +650,6 @@ onUnmounted(() => {
 }
 .ticker-input:focus { border-color: #2962ff; }
 
-/* 開關樣式共用 */
 .toggle-switch {
   display: flex; background-color: #2a2e39; border-radius: 6px;
   position: relative; cursor: pointer; padding: 4px; user-select: none; align-items: center;
@@ -672,7 +662,6 @@ onUnmounted(() => {
 }
 .toggle-switch .slider.adjusted { transform: translateX(100%); }
 
-/* 🔥 三段式週期切換專用樣式 */
 .timeframe-switch span { width: 55px; }
 .timeframe-switch .slider { width: calc(33.33% - 4px); }
 .timeframe-switch .slider.daily { transform: translateX(0%); }
@@ -725,7 +714,6 @@ onUnmounted(() => {
 .prob-table th { color: #8c8f98; font-weight: 500; text-align: right; }
 .prob-table tbody tr:hover { background-color: rgba(255,255,255,0.02); }
 
-/* 🔥 選擇權回測模組樣式 */
 .opt-prob-wrapper { background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
 .opt-form-card { background-color: #2a2e39; padding: 20px; border-radius: 8px; border: 1px solid #434651; }
 .latest-price-badge { background-color: #131722; padding: 8px 16px; border-radius: 6px; border: 1px solid #434651; }
@@ -738,7 +726,6 @@ onUnmounted(() => {
 .fs-7 { font-size: 0.85rem; }
 
 .error-message { background-color: rgba(239, 83, 80, 0.1); color: #ef5350; padding: 12px 16px; border-radius: 6px; margin-bottom: 24px; border: 1px solid rgba(239, 83, 80, 0.2); }
-/* 為了容納成交量，加高圖表容器高度 */
 .chart-wrapper { position: relative; width: 100%; height: 650px; border: 1px solid #2b2b43; border-radius: 8px; overflow: hidden; background-color: #1E222D; }
 .chart-container { width: 100%; height: 100%; }
 </style>
