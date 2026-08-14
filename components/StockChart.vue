@@ -155,16 +155,16 @@
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
           <h5 class="m-0 text-white">設定評估部位</h5>
           
-          <!-- 🔥 新增：區間最高價、最低價顯示 -->
-          <div class="d-flex flex-wrap gap-2 align-items-center">
+          <!-- 🔥 修復：文字標籤清晰化與徽章美化 -->
+          <div class="d-flex flex-wrap gap-3 align-items-center">
             <div class="latest-price-badge">
-              <span class="text-muted fs-7">區間最高價:</span> <span class="fw-bold text-success">${{ periodExtremes.high.toFixed(2) }}</span>
+              <span class="badge-label">區間最高價:</span> <span class="fw-bold text-success">${{ periodExtremes.high.toFixed(2) }}</span>
             </div>
             <div class="latest-price-badge">
-              <span class="text-muted fs-7">區間最低價:</span> <span class="fw-bold text-danger">${{ periodExtremes.low.toFixed(2) }}</span>
+              <span class="badge-label">區間最低價:</span> <span class="fw-bold text-danger">${{ periodExtremes.low.toFixed(2) }}</span>
             </div>
-            <div class="latest-price-badge border-warning">
-              <span class="text-muted fs-7">最新參考價:</span> <span class="fw-bold text-warning fs-5">${{ latestClosePrice.toFixed(2) }}</span>
+            <div class="latest-price-badge highlight-badge">
+              <span class="badge-label">最新參考價:</span> <span class="fw-bold text-warning fs-5">${{ latestClosePrice.toFixed(2) }}</span>
             </div>
           </div>
         </div>
@@ -376,15 +376,14 @@ const processedData = computed(() => {
   return { dates, kLineValues, volumes };
 });
 
-// 🔥 新增：動態計算當前查詢區間的最高與最低價
 const periodExtremes = computed(() => {
   const kValues = processedData.value.kLineValues;
   if (!kValues || kValues.length === 0) return { high: 0, low: 0 };
   let high = -Infinity;
   let low = Infinity;
   kValues.forEach(k => {
-    if (k[3] > high) high = k[3]; // k[3] 是 high
-    if (k[2] < low) low = k[2];   // k[2] 是 low
+    if (k[3] > high) high = k[3]; 
+    if (k[2] < low) low = k[2];   
   });
   return { high, low };
 });
@@ -770,7 +769,12 @@ onUnmounted(() => {
 /* 🔥 選擇權回測模組樣式 */
 .opt-prob-wrapper { background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
 .opt-form-card { background-color: #2a2e39; padding: 20px; border-radius: 8px; border: 1px solid #434651; }
-.latest-price-badge { background-color: #131722; padding: 8px 16px; border-radius: 6px; border: 1px solid #434651; }
+
+/* 🌟 修復對比度：使用亮灰色與光暈徽章 */
+.latest-price-badge { background-color: #1e222d; padding: 10px 16px; border-radius: 6px; border: 1px solid #434651; display: flex; align-items: center; gap: 8px; }
+.latest-price-badge.highlight-badge { border-color: #e0ac00 !important; background-color: rgba(224, 172, 0, 0.1); }
+.badge-label { color: #d1d4dc; font-size: 0.85rem; }
+
 .form-group { margin-bottom: 14px; display: flex; flex-direction: column; gap: 4px; }
 .form-group label { font-size: 0.85rem; color: #8c8f98; }
 .dark-input { background-color: #131722; border: 1px solid #434651; color: #fff; padding: 10px; border-radius: 6px; outline: none; }
