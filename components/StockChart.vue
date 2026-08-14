@@ -306,7 +306,16 @@ const timeConfig = computed(() => {
   }
 });
 
-// 🔥 處理成交量與 K 線資料，加入容錯解析機制
+// 🔥 超強防呆成交量抓取器
+const extractVolume = (obj) => {
+  for (const key in obj) {
+    if (key.toLowerCase() === 'volume' || key.toLowerCase() === 'vol') {
+      return obj[key];
+    }
+  }
+  return 0;
+};
+
 const processedData = computed(() => {
   if (!rawData.value || rawData.value.length === 0) return { dates: [], kLineValues: [], volumes: [] };
 
@@ -322,8 +331,9 @@ const processedData = computed(() => {
     if (timeframe.value === 'weekly') groupKey = getWeekKey(item.time);
     if (timeframe.value === 'monthly') groupKey = item.time.substring(0, 7);
 
-    // 支援各種 API 常見的 Volume 欄位大小寫
-    const itemVol = Number(item.volume !== undefined ? item.volume : (item.Volume !== undefined ? item.Volume : 0));
+    // 確保成交量不管怎麼命名都能抓到，並過濾千分位字串
+    const rawVol = extractVolume(item);
+    const itemVol = Number(String(rawVol).replace(/,/g, '')) || 0;
 
     if (!grouped[groupKey]) {
       grouped[groupKey] = {
@@ -335,7 +345,7 @@ const processedData = computed(() => {
       grouped[groupKey].high = Math.max(grouped[groupKey].high, item.high);
       grouped[groupKey].low = Math.min(grouped[groupKey].low, item.low);
       grouped[groupKey].close = item.close; 
-      grouped[groupKey].volume += itemVol; // 加總成交量
+      grouped[groupKey].volume += itemVol; 
       grouped[groupKey].adjclose = item.adjclose;
     }
   });
@@ -344,7 +354,7 @@ const processedData = computed(() => {
   const kLineValues = [];
   const volumes = [];
 
-  Object.values(grouped).forEach((item, index) => {
+  Object.values(grouped).forEach(item => {
     dates.push(item.time);
     let o = item.open, c = item.close, l = item.low, h = item.high;
     if (isAdjusted.value && item.adjclose && item.close) {
@@ -352,13 +362,7 @@ const processedData = computed(() => {
       o *= ratio; c *= ratio; l *= ratio; h *= ratio;
     }
     kLineValues.push([o, c, l, h]);
-    
-    const sign = c >= o ? 1 : -1;
-    // 將 Volume 組成標準 ECharts 物件，徹底解決顯示不出的問題
-    volumes.push({
-      value: item.volume,
-      itemStyle: { color: sign === 1 ? '#26a69a' : '#ef5350' }
-    });
+    volumes.push(item.volume);
   });
 
   return { dates, kLineValues, volumes };
@@ -557,12 +561,35 @@ const renderChart = (dates, kLineValues, volumes) => {
     backgroundColor: 'transparent',
     tooltip: { 
       trigger: 'axis', 
-      axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } 
+      axisPointer: { type: 'cross' },
+      // 🔥 自訂完美的 Tooltip：美化小數點並處理成交量
+      formatter: function (params) {
+        const dataIdx = params[0].dataIndex;
+        const kData = kLineValues[dataIdx];
+        const vData = volumes[dataIdx];
+        
+        let res = `<div style="font-weight:bold;margin-bottom:8px;border-bottom:1px solid #434651;padding-bottom:5px;color:#fff;">${dates[dataIdx]}</div>`;
+        
+        if (kData) {
+          const isUp = kData[1] >= kData[0];
+          const color = isUp ? '#26a69a' : '#ef5350';
+          res += `<div style="display:flex;justify-content:space-between;gap:24px;margin-bottom:4px;"><span>開盤:</span> <span style="font-weight:bold;color:#d1d4dc;">${Number(kData[0]).toFixed(2)}</span></div>`;
+          res += `<div style="display:flex;justify-content:space-between;gap:24px;margin-bottom:4px;"><span>收盤:</span> <span style="font-weight:bold;color:${color};">${Number(kData[1]).toFixed(2)}</span></div>`;
+          res += `<div style="display:flex;justify-content:space-between;gap:24px;margin-bottom:4px;"><span>最低:</span> <span style="font-weight:bold;color:#d1d4dc;">${Number(kData[2]).toFixed(2)}</span></div>`;
+          res += `<div style="display:flex;justify-content:space-between;gap:24px;"><span>最高:</span> <span style="font-weight:bold;color:#d1d4dc;">${Number(kData[3]).toFixed(2)}</span></div>`;
+        }
+        if (vData !== undefined) {
+          const volStr = vData > 0 ? Number(vData).toLocaleString() : '無資料 / 0';
+          res += `<div style="display:flex;justify-content:space-between;gap:24px;margin-top:8px;border-top:1px solid #434651;padding-top:8px;"><span>成交量:</span> <span style="font-weight:bold;color:#e0ac00;">${volStr}</span></div>`;
+        }
+        
+        return res;
+      }
     },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     grid: [
-      { left: '5%', right: '5%', top: '5%', height: '60%' }, // K線區域
-      { left: '5%', right: '5%', top: '70%', height: '20%' }  // 成交量區域
+      { left: '5%', right: '5%', top: '5%', height: '60%' }, 
+      { left: '5%', right: '5%', top: '70%', height: '20%' }  
     ],
     xAxis: [
       { type: 'category', data: dates, boundaryGap: false, axisLine: { lineStyle: { color: '#434651' } }, splitLine: { show: false }, axisLabel: { show: false } },
@@ -570,7 +597,7 @@ const renderChart = (dates, kLineValues, volumes) => {
     ],
     yAxis: [
       { scale: true, position: 'right', axisLine: { lineStyle: { color: '#434651' } }, axisLabel: { color: '#8c8f98' }, splitLine: { lineStyle: { color: '#2B2B43' } } },
-      { type: 'value', gridIndex: 1, position: 'right', splitLine: { show: false }, axisLabel: { show: false }, min: 0 } // 成交量從 0 開始
+      { type: 'value', gridIndex: 1, position: 'right', splitLine: { show: false }, axisLabel: { show: false }, min: 0 } 
     ],
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1], start: 0, end: 100 },
@@ -589,7 +616,10 @@ const renderChart = (dates, kLineValues, volumes) => {
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: volumes
+        data: volumes.map((vol, idx) => ({
+          value: vol,
+          itemStyle: { color: kLineValues[idx][1] >= kLineValues[idx][0] ? '#26a69a' : '#ef5350' }
+        }))
       }
     ]
   };
@@ -626,6 +656,8 @@ const fetchData = async () => {
   }
 };
 
+onMounted(() => { /* fetchData(); */ });
+
 onUnmounted(() => {
   if (resizeObserver) resizeObserver.disconnect();
   if (chartInstance) { chartInstance.dispose(); chartInstance = null; }
@@ -650,6 +682,7 @@ onUnmounted(() => {
 }
 .ticker-input:focus { border-color: #2962ff; }
 
+/* 開關樣式共用 */
 .toggle-switch {
   display: flex; background-color: #2a2e39; border-radius: 6px;
   position: relative; cursor: pointer; padding: 4px; user-select: none; align-items: center;
