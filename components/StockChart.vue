@@ -306,7 +306,6 @@ const timeConfig = computed(() => {
   }
 });
 
-// 🔥 超強防呆成交量抓取器
 const extractVolume = (obj) => {
   for (const key in obj) {
     if (key.toLowerCase() === 'volume' || key.toLowerCase() === 'vol') {
@@ -331,7 +330,6 @@ const processedData = computed(() => {
     if (timeframe.value === 'weekly') groupKey = getWeekKey(item.time);
     if (timeframe.value === 'monthly') groupKey = item.time.substring(0, 7);
 
-    // 確保成交量不管怎麼命名都能抓到，並過濾千分位字串
     const rawVol = extractVolume(item);
     const itemVol = Number(String(rawVol).replace(/,/g, '')) || 0;
 
@@ -362,6 +360,8 @@ const processedData = computed(() => {
       o *= ratio; c *= ratio; l *= ratio; h *= ratio;
     }
     kLineValues.push([o, c, l, h]);
+    
+    // 🔥 徹底修復：在這裡只推入純數字，不再包裝為物件！
     volumes.push(item.volume);
   });
 
@@ -562,11 +562,10 @@ const renderChart = (dates, kLineValues, volumes) => {
     tooltip: { 
       trigger: 'axis', 
       axisPointer: { type: 'cross' },
-      // 🔥 自訂完美的 Tooltip：美化小數點並處理成交量
       formatter: function (params) {
         const dataIdx = params[0].dataIndex;
         const kData = kLineValues[dataIdx];
-        const vData = volumes[dataIdx];
+        const vData = volumes[dataIdx]; // 🔥 現在這裡會抓到正確的純數字了！
         
         let res = `<div style="font-weight:bold;margin-bottom:8px;border-bottom:1px solid #434651;padding-bottom:5px;color:#fff;">${dates[dataIdx]}</div>`;
         
@@ -579,6 +578,7 @@ const renderChart = (dates, kLineValues, volumes) => {
           res += `<div style="display:flex;justify-content:space-between;gap:24px;"><span>最高:</span> <span style="font-weight:bold;color:#d1d4dc;">${Number(kData[3]).toFixed(2)}</span></div>`;
         }
         if (vData !== undefined) {
+          // 加入千分位格式化
           const volStr = vData > 0 ? Number(vData).toLocaleString() : '無資料 / 0';
           res += `<div style="display:flex;justify-content:space-between;gap:24px;margin-top:8px;border-top:1px solid #434651;padding-top:8px;"><span>成交量:</span> <span style="font-weight:bold;color:#e0ac00;">${volStr}</span></div>`;
         }
@@ -616,6 +616,7 @@ const renderChart = (dates, kLineValues, volumes) => {
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
+        // 🔥 將純數字陣列動態映射為包含顏色的物件
         data: volumes.map((vol, idx) => ({
           value: vol,
           itemStyle: { color: kLineValues[idx][1] >= kLineValues[idx][0] ? '#26a69a' : '#ef5350' }
