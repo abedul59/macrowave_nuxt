@@ -43,7 +43,8 @@ export default defineEventHandler(async (event) => {
           high: item.high,
           low: item.low,
           close: item.close,
-          adjclose: item.adjclose // 🔥 新增：抓取還權收盤價
+          adjclose: item.adjclose, 
+          volume: item.volume || 0 // 🔥 關鍵修復：將成交量一起打包傳給前端
         };
       });
 
