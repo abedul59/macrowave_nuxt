@@ -11,6 +11,14 @@
           @keyup.enter="fetchData"
         />
         
+        <!-- 🔥 新增：K 線週期切換 -->
+        <div class="toggle-switch timeframe-switch">
+          <div class="slider" :class="timeframe"></div>
+          <span :class="{ 'active': timeframe === 'daily' }" @click="timeframe = 'daily'">日 K</span>
+          <span :class="{ 'active': timeframe === 'weekly' }" @click="timeframe = 'weekly'">週 K</span>
+          <span :class="{ 'active': timeframe === 'monthly' }" @click="timeframe = 'monthly'">月 K</span>
+        </div>
+
         <div class="toggle-switch" @click="toggleAdjusted">
           <div class="slider" :class="{ 'adjusted': isAdjusted }"></div>
           <span :class="{ 'active': !isAdjusted }">非還權</span>
@@ -37,34 +45,34 @@
       {{ error }}
     </div>
 
-    <!-- 四宮格統計數據 -->
+    <!-- 四宮格統計數據 (動態標題) -->
     <div class="stats-container" v-if="stats && !loading && !error">
       <div class="stat-box rise">
-        <div class="stat-label">區間單日最大漲幅</div>
+        <div class="stat-label">區間單{{ timeConfig.label }}最大漲幅</div>
         <div class="stat-value">+{{ stats.maxRise.toFixed(2) }}%</div>
         <div class="stat-date">{{ stats.maxRiseDate }} ( +{{ stats.maxRisePoint.toFixed(2) }} 點 )</div>
       </div>
       <div class="stat-box rise">
-        <div class="stat-label">平均單日上漲幅度</div>
+        <div class="stat-label">平均單{{ timeConfig.label }}上漲幅度</div>
         <div class="stat-value">+{{ stats.avgRise.toFixed(2) }}%</div>
         <div class="stat-date">發生次數: {{ stats.countRise }} 次</div>
       </div>
       <div class="stat-box fall">
-        <div class="stat-label">區間單日最大跌幅</div>
+        <div class="stat-label">區間單{{ timeConfig.label }}最大跌幅</div>
         <div class="stat-value">{{ stats.maxFall.toFixed(2) }}%</div>
         <div class="stat-date">{{ stats.maxFallDate }} ( {{ stats.maxFallPoint.toFixed(2) }} 點 )</div>
       </div>
       <div class="stat-box fall">
-        <div class="stat-label">平均單日下跌幅度</div>
+        <div class="stat-label">平均單{{ timeConfig.label }}下跌幅度</div>
         <div class="stat-value">{{ stats.avgFall.toFixed(2) }}%</div>
         <div class="stat-date">發生次數: {{ stats.countFall }} 次</div>
       </div>
     </div>
 
-    <!-- 漲跌幅分佈統計塊 -->
+    <!-- 漲跌幅分佈統計塊 (動態標題) -->
     <div class="distribution-wrapper" v-if="stats && !loading && !error">
       <div class="dist-card rise-dist">
-        <div class="dist-header">🚀 單日漲幅超過 (發生次數)</div>
+        <div class="dist-header">🚀 單{{ timeConfig.label }}漲幅超過 (發生次數)</div>
         <div class="dist-body">
           <div class="dist-item" v-for="i in 6" :key="'r'+i">
             <span class="dist-label">> {{ i }}%</span>
@@ -73,7 +81,7 @@
         </div>
       </div>
       <div class="dist-card fall-dist">
-        <div class="dist-header">⚠️ 單日跌幅超過 (發生次數)</div>
+        <div class="dist-header">⚠️ 單{{ timeConfig.label }}跌幅超過 (發生次數)</div>
         <div class="dist-body">
           <div class="dist-item" v-for="i in 6" :key="'f'+i">
             <span class="dist-label">< -{{ i }}%</span>
@@ -83,6 +91,7 @@
       </div>
     </div>
 
+    <!-- K線圖與成交量 -->
     <div class="chart-wrapper mb-4">
       <div id="us-stock-chart" ref="chartContainer" class="chart-container"></div>
     </div>
@@ -92,7 +101,7 @@
       <h3 class="prob-title">🎯 大盤波段目標觸及機率 (基於目前查詢區間)</h3>
       <div class="prob-explanation">
         <h5 class="fw-bold text-info mb-2">💡 我該如何解讀這張表？</h5>
-        <p class="mb-2">以歷史每日收盤價為基準，計算未來特定週數內碰到指定漲跌幅的機率。包含極短線(1%, 3%)與波段目標。</p>
+        <p class="mb-2">以歷史每{{ timeConfig.label }}收盤價為基準，計算未來特定 K 棒數量內碰到指定漲跌幅的機率。包含極短線(1%, 3%)與波段目標。</p>
       </div>
       
       <div class="prob-tables mt-3">
@@ -103,17 +112,14 @@
             <table class="prob-table">
               <thead>
                 <tr>
-                  <th>目標幅度</th><th>一週內(5T)</th><th>兩週內(10T)</th><th>三週內(15T)</th><th>四週內(20T)</th><th>五週內(25T)</th>
+                  <th>目標幅度</th>
+                  <th v-for="hLabel in timeConfig.horizonLabels" :key="'th_rise_'+hLabel">{{ hLabel }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="t in probStats.thresholds" :key="'rise_'+t">
                   <td class="fw-bold text-success">+{{ t }}%</td>
-                  <td>{{ probStats.results.rise[t][0] }}%</td>
-                  <td>{{ probStats.results.rise[t][1] }}%</td>
-                  <td>{{ probStats.results.rise[t][2] }}%</td>
-                  <td>{{ probStats.results.rise[t][3] }}%</td>
-                  <td>{{ probStats.results.rise[t][4] }}%</td>
+                  <td v-for="(val, idx) in probStats.results.rise[t]" :key="'val_rise_'+t+'_'+idx">{{ val }}%</td>
                 </tr>
               </tbody>
             </table>
@@ -127,17 +133,14 @@
             <table class="prob-table">
               <thead>
                 <tr>
-                  <th>目標幅度</th><th>一週內(5T)</th><th>兩週內(10T)</th><th>三週內(15T)</th><th>四週內(20T)</th><th>五週內(25T)</th>
+                  <th>目標幅度</th>
+                  <th v-for="hLabel in timeConfig.horizonLabels" :key="'th_fall_'+hLabel">{{ hLabel }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="t in probStats.thresholds" :key="'fall_'+t">
                   <td class="fw-bold text-danger">-{{ t }}%</td>
-                  <td>{{ probStats.results.fall[t][0] }}%</td>
-                  <td>{{ probStats.results.fall[t][1] }}%</td>
-                  <td>{{ probStats.results.fall[t][2] }}%</td>
-                  <td>{{ probStats.results.fall[t][3] }}%</td>
-                  <td>{{ probStats.results.fall[t][4] }}%</td>
+                  <td v-for="(val, idx) in probStats.results.fall[t]" :key="'val_fall_'+t+'_'+idx">{{ val }}%</td>
                 </tr>
               </tbody>
             </table>
@@ -146,7 +149,7 @@
       </div>
     </div>
 
-    <!-- 🔥 新增：專屬選擇權履約價回測矩陣 -->
+    <!-- 選擇權履約價回測矩陣 -->
     <div class="opt-prob-wrapper" v-if="processedData.kLineValues.length > 0 && !loading && !error">
       <h3 class="prob-title text-warning border-bottom border-secondary pb-2 mb-3">🦅 選擇權履約價風險回測矩陣</h3>
       
@@ -154,7 +157,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
           <h5 class="m-0 text-white">設定評估部位</h5>
           <div class="latest-price-badge">
-            當前最新參考價: <span class="fw-bold text-warning fs-4">${{ latestClosePrice.toFixed(2) }}</span>
+            最新參考價: <span class="fw-bold text-warning fs-4">${{ latestClosePrice.toFixed(2) }}</span>
           </div>
         </div>
         
@@ -194,13 +197,14 @@
             <table class="prob-table">
               <thead>
                 <tr>
-                  <th>歷史資料區間</th><th>一週內 (5T)</th><th>兩週內 (10T)</th><th>三週內 (15T)</th>
+                  <th>歷史資料區間</th>
+                  <th v-for="hLabel in timeConfig.horizonLabels.slice(0,3)" :key="'opt_th_put_'+hLabel">{{ hLabel }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="res in optProbResults.results" :key="'put_'+res.label">
                   <td class="fw-bold text-white">{{ res.label }}</td>
-                  <td v-if="!res.isValid" colspan="3" class="text-muted text-center">資料量不足 (請在上方切換至5年以載入)</td>
+                  <td v-if="!res.isValid" colspan="3" class="text-muted text-center">資料量不足 (請切換更長年份)</td>
                   <template v-else>
                     <td :class="{'text-danger fw-bold': res.putProbs[0] > 10}">{{ res.putProbs[0] }}%</td>
                     <td :class="{'text-danger fw-bold': res.putProbs[1] > 10}">{{ res.putProbs[1] }}%</td>
@@ -219,13 +223,14 @@
             <table class="prob-table">
               <thead>
                 <tr>
-                  <th>歷史資料區間</th><th>一週內 (5T)</th><th>兩週內 (10T)</th><th>三週內 (15T)</th>
+                  <th>歷史資料區間</th>
+                  <th v-for="hLabel in timeConfig.horizonLabels.slice(0,3)" :key="'opt_th_call_'+hLabel">{{ hLabel }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="res in optProbResults.results" :key="'call_'+res.label">
                   <td class="fw-bold text-white">{{ res.label }}</td>
-                  <td v-if="!res.isValid" colspan="3" class="text-muted text-center">資料量不足 (請在上方切換至5年以載入)</td>
+                  <td v-if="!res.isValid" colspan="3" class="text-muted text-center">資料量不足 (請切換更長年份)</td>
                   <template v-else>
                     <td :class="{'text-danger fw-bold': res.callProbs[0] > 10}">{{ res.callProbs[0] }}%</td>
                     <td :class="{'text-danger fw-bold': res.callProbs[1] > 10}">{{ res.callProbs[1] }}%</td>
@@ -237,9 +242,7 @@
           </div>
         </div>
       </div>
-
     </div>
-
   </div>
 </template>
 
@@ -256,6 +259,9 @@ const ranges = [
   { label: '5 年', value: '5y' }
 ];
 
+// 🔥 K 線週期切換狀態
+const timeframe = ref('daily'); // 'daily', 'weekly', 'monthly'
+
 const loading = ref(false);
 const error = ref('');
 const rawData = ref([]); 
@@ -263,8 +269,6 @@ const isAdjusted = ref(false);
 
 const stats = ref(null);
 const probStats = ref(null); 
-
-// 🔥 新增：選擇權評估狀態
 const optStrategy = ref('ironCondor');
 const optStrikes = ref({ shortPut: null, shortCall: null });
 const latestClosePrice = ref(0);
@@ -274,22 +278,91 @@ const chartContainer = ref(null);
 let chartInstance = null;
 let resizeObserver = null;
 
-// 🔥 核心：將 K 線資料處理提煉為 Computed，讓所有模組可以響應式共用
+// 🔥 週期設定設定表：根據不同週期自動調整文字與回測參數
+const timeConfig = computed(() => {
+  if (timeframe.value === 'daily') {
+    return {
+      label: '日',
+      horizons: [5, 10, 15, 20, 25],
+      horizonLabels: ['一週內 (5T)', '兩週內 (10T)', '三週內 (15T)', '四週內 (20T)', '五週內 (25T)'],
+      historySpans: [
+        { label: '過去 1 年', periods: 252 }, { label: '過去 2 年', periods: 504 },
+        { label: '過去 3 年', periods: 756 }, { label: '過去 5 年', periods: 1260 }
+      ]
+    };
+  } else if (timeframe.value === 'weekly') {
+    return {
+      label: '週',
+      horizons: [1, 2, 3, 4, 5],
+      horizonLabels: ['一週內 (1T)', '兩週內 (2T)', '三週內 (3T)', '四週內 (4T)', '五週內 (5T)'],
+      historySpans: [
+        { label: '過去 1 年', periods: 52 }, { label: '過去 2 年', periods: 104 },
+        { label: '過去 3 年', periods: 156 }, { label: '過去 5 年', periods: 260 }
+      ]
+    };
+  } else { // monthly
+    return {
+      label: '月',
+      horizons: [1, 2, 3, 4, 5],
+      horizonLabels: ['一個月內 (1T)', '兩個月內 (2T)', '三個月內 (3T)', '四個月內 (4T)', '五個月內 (5T)'],
+      historySpans: [
+        { label: '過去 1 年', periods: 12 }, { label: '過去 2 年', periods: 24 },
+        { label: '過去 3 年', periods: 36 }, { label: '過去 5 年', periods: 60 }
+      ]
+    };
+  }
+});
+
+// 🔥 資料核心處理引擎：依照週期合併日K資料
 const processedData = computed(() => {
-  if (!rawData.value || rawData.value.length === 0) return { dates: [], kLineValues: [] };
-  const dates = [];
-  const kLineValues = [];
-  
+  if (!rawData.value || rawData.value.length === 0) return { dates: [], kLineValues: [], volumes: [] };
+
+  const getWeekKey = (dateStr) => {
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1));
+    return d.toISOString().split('T')[0];
+  };
+
+  const grouped = {};
   rawData.value.forEach(item => {
-    dates.push(item.time);
-    if (isAdjusted.value && item.adjclose && item.close) {
-      const ratio = item.adjclose / item.close;
-      kLineValues.push([item.open * ratio, item.close * ratio, item.low * ratio, item.high * ratio]);
+    let groupKey = item.time;
+    if (timeframe.value === 'weekly') groupKey = getWeekKey(item.time);
+    if (timeframe.value === 'monthly') groupKey = item.time.substring(0, 7);
+
+    if (!grouped[groupKey]) {
+      grouped[groupKey] = {
+        time: item.time, open: item.open, high: item.high, low: item.low, close: item.close,
+        volume: item.volume || 0, adjclose: item.adjclose
+      };
     } else {
-      kLineValues.push([item.open, item.close, item.low, item.high]);
+      grouped[groupKey].time = item.time; // 取該週期最後一天的日期標示
+      grouped[groupKey].high = Math.max(grouped[groupKey].high, item.high);
+      grouped[groupKey].low = Math.min(grouped[groupKey].low, item.low);
+      grouped[groupKey].close = item.close; 
+      grouped[groupKey].volume += (item.volume || 0);
+      grouped[groupKey].adjclose = item.adjclose;
     }
   });
-  return { dates, kLineValues };
+
+  const dates = [];
+  const kLineValues = [];
+  const volumes = [];
+
+  Object.values(grouped).forEach((item, index) => {
+    dates.push(item.time);
+    let o = item.open, c = item.close, l = item.low, h = item.high;
+    if (isAdjusted.value && item.adjclose && item.close) {
+      const ratio = item.adjclose / item.close;
+      o *= ratio; c *= ratio; l *= ratio; h *= ratio;
+    }
+    kLineValues.push([o, c, l, h]);
+    
+    // 判斷該 K 棒漲跌以決定成交量顏色 (1=漲, -1=跌)
+    const sign = c >= o ? 1 : -1;
+    volumes.push([index, item.volume, sign]);
+  });
+
+  return { dates, kLineValues, volumes };
 });
 
 const setRange = (newRange) => {
@@ -301,14 +374,10 @@ const toggleAdjusted = () => {
   isAdjusted.value = !isAdjusted.value;
 };
 
-const resetOptStrikes = () => {
-  optStrikes.value = { shortPut: null, shortCall: null };
-};
-
-// 監聽處理完的資料，重新繪圖並計算機率
+// 監聽處理後的資料改變，觸發畫面全部更新
 watch(processedData, (newVal) => {
   if (newVal.dates.length > 0) {
-    renderChart(newVal.dates, newVal.kLineValues);
+    renderChart(newVal.dates, newVal.kLineValues, newVal.volumes);
     calculateStats(newVal.dates, newVal.kLineValues);
     calculateProbabilities(newVal.kLineValues);
     latestClosePrice.value = newVal.kLineValues[newVal.kLineValues.length - 1][1];
@@ -327,14 +396,10 @@ const calculateStats = (dates, kLineValues) => {
   let maxRise = 0, maxFall = 0, maxRiseDate = '', maxFallDate = '';
   let maxRisePoint = 0, maxFallPoint = 0, sumRise = 0, countRise = 0, sumFall = 0, countFall = 0;
 
-  let distribution = {
-    rise: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
-    fall: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }
-  };
+  let distribution = { rise: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }, fall: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 } };
 
   for (let i = 1; i < kLineValues.length; i++) {
-    const prevClose = kLineValues[i - 1][1]; 
-    const currClose = kLineValues[i][1];
+    const prevClose = kLineValues[i - 1][1], currClose = kLineValues[i][1];
     const changePercent = ((currClose - prevClose) / prevClose) * 100;
     const changePoint = currClose - prevClose;
 
@@ -365,9 +430,8 @@ const calculateStats = (dates, kLineValues) => {
 };
 
 const calculateProbabilities = (kLineValues) => {
-  // 🔥 新增 1, 3, 7% 與 四、五週
-  const horizons = [5, 10, 15, 20, 25]; 
-  const thresholds = [1, 3, 5, 7, 10, 15, 20, 25, 30];
+  const horizons = timeConfig.value.horizons; 
+  const thresholds = [1, 3, 5, 7, 10, 15, 20, 25, 30]; // 包含短線 1%, 3%, 7%
 
   let results = { rise: {}, fall: {} };
   thresholds.forEach(t => {
@@ -379,11 +443,11 @@ const calculateProbabilities = (kLineValues) => {
 
   for (let i = 0; i < kLineValues.length; i++) {
     const currentClose = kLineValues[i][1]; 
-    horizons.forEach((days, hIndex) => {
-      if (i + days < kLineValues.length) {
+    horizons.forEach((periods, hIndex) => {
+      if (i + periods < kLineValues.length) {
         totalCounts[hIndex]++;
         let maxHigh = -Infinity, minLow = Infinity;
-        for (let j = 1; j <= days; j++) {
+        for (let j = 1; j <= periods; j++) {
            if (kLineValues[i + j][3] > maxHigh) maxHigh = kLineValues[i + j][3];
            if (kLineValues[i + j][2] < minLow) minLow = kLineValues[i + j][2];
         }
@@ -406,34 +470,25 @@ const calculateProbabilities = (kLineValues) => {
     }
   });
 
-  probStats.value = { results, thresholds, horizons, totalCounts };
+  probStats.value = { results, thresholds };
 };
 
-// 🔥 核心：選擇權特定履約價之歷史回測矩陣計算
 const calculateOptionProbabilities = (kLineValues) => {
   const latestPrice = latestClosePrice.value;
   const { shortPut, shortCall } = optStrikes.value;
   
-  // 計算距離現在價格的百分比距離
-  const spPct = shortPut ? ((shortPut - latestPrice) / latestPrice) * 100 : null; // 預期為負數
-  const scPct = shortCall ? ((shortCall - latestPrice) / latestPrice) * 100 : null; // 預期為正數
+  const spPct = shortPut ? ((shortPut - latestPrice) / latestPrice) * 100 : null; 
+  const scPct = shortCall ? ((shortCall - latestPrice) / latestPrice) * 100 : null; 
 
-  const horizons = [5, 10, 15]; // 只看一、二、三週
-  const historySpans = [
-    { label: '過去 1 年', days: 252 },
-    { label: '過去 2 年', days: 504 },
-    { label: '過去 3 年', days: 756 },
-    { label: '過去 5 年', days: 1260 }
-  ];
+  // 只取前三個觀察期 (例如一、二、三週內)
+  const horizons = timeConfig.value.horizons.slice(0, 3); 
+  const historySpans = timeConfig.value.historySpans;
 
   let results = [];
 
   historySpans.forEach(span => {
-    // 依據歷史跨度切割陣列
-    const sliceData = kLineValues.slice(Math.max(0, kLineValues.length - span.days));
-    
-    // 如果使用者目前選擇的是「1年」，那麼2, 3, 5年的資料會不足，需要標示為無效
-    const isValid = sliceData.length >= (span.days * 0.8); // 容許20%的交易日誤差
+    const sliceData = kLineValues.slice(Math.max(0, kLineValues.length - span.periods));
+    const isValid = sliceData.length >= (span.periods * 0.8);
 
     if (!isValid) {
       results.push({ label: span.label, isValid: false });
@@ -444,26 +499,20 @@ const calculateOptionProbabilities = (kLineValues) => {
     let hitPut = [0, 0, 0];
     let hitCall = [0, 0, 0];
 
-    // 滾動回測
     for (let i = 0; i < sliceData.length; i++) {
       const currentClose = sliceData[i][1];
       
-      horizons.forEach((days, hIndex) => {
-        if (i + days < sliceData.length) {
+      horizons.forEach((periods, hIndex) => {
+        if (i + periods < sliceData.length) {
           totalCounts[hIndex]++;
-          let minLow = Infinity;
-          let maxHigh = -Infinity;
-          
-          // 找出未來 N 天的極值
-          for (let j = 1; j <= days; j++) {
+          let minLow = Infinity, maxHigh = -Infinity;
+          for (let j = 1; j <= periods; j++) {
             if (sliceData[i+j][2] < minLow) minLow = sliceData[i+j][2];
             if (sliceData[i+j][3] > maxHigh) maxHigh = sliceData[i+j][3];
           }
-
           const dropPct = ((minLow - currentClose) / currentClose) * 100;
           const risePct = ((maxHigh - currentClose) / currentClose) * 100;
 
-          // 判斷是否貫穿
           if (spPct !== null && dropPct <= spPct) hitPut[hIndex]++;
           if (scPct !== null && risePct >= scPct) hitCall[hIndex]++;
         }
@@ -481,7 +530,7 @@ const calculateOptionProbabilities = (kLineValues) => {
   optProbResults.value = { results };
 };
 
-const renderChart = (dates, kLineValues) => {
+const renderChart = (dates, kLineValues, volumes) => {
   const dom = chartContainer.value;
   if (!dom) return;
 
@@ -510,38 +559,45 @@ const renderChart = (dates, kLineValues) => {
 
   const option = {
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-    grid: { left: '5%', right: '5%', bottom: '15%', top: '5%' },
-    xAxis: {
-      type: 'category',
-      data: dates,
-      scale: true,
-      boundaryGap: false,
-      axisLine: { lineStyle: { color: '#434651' } },
-      axisLabel: { color: '#8c8f98' },
-      splitLine: { show: false }
+    tooltip: { 
+      trigger: 'axis', 
+      axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } 
     },
-    yAxis: {
-      scale: true,
-      position: 'right',
-      axisLine: { lineStyle: { color: '#434651' } },
-      axisLabel: { color: '#8c8f98' },
-      splitLine: { lineStyle: { color: '#2B2B43' } }
-    },
+    axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    // 🔥 調整 Grid，切割為 K 線與成交量兩塊
+    grid: [
+      { left: '5%', right: '5%', top: '5%', height: '65%' },
+      { left: '5%', right: '5%', top: '75%', height: '15%' }
+    ],
+    xAxis: [
+      { type: 'category', data: dates, boundaryGap: false, axisLine: { lineStyle: { color: '#434651' } }, splitLine: { show: false }, axisLabel: { show: false } },
+      { type: 'category', gridIndex: 1, data: dates, boundaryGap: false, axisLine: { lineStyle: { color: '#434651' } }, axisLabel: { color: '#8c8f98' } }
+    ],
+    yAxis: [
+      { scale: true, position: 'right', axisLine: { lineStyle: { color: '#434651' } }, axisLabel: { color: '#8c8f98' }, splitLine: { lineStyle: { color: '#2B2B43' } } },
+      { scale: true, gridIndex: 1, position: 'right', splitLine: { show: false }, axisLabel: { show: false } }
+    ],
     dataZoom: [
-      { type: 'inside', start: 0, end: 100 },
-      { show: true, type: 'slider', top: '90%', bottom: '2%', borderColor: '#2B2B43', textStyle: { color: '#8c8f98' } }
+      { type: 'inside', xAxisIndex: [0, 1], start: 0, end: 100 },
+      { show: true, type: 'slider', xAxisIndex: [0, 1], top: '92%', bottom: '1%', borderColor: '#2B2B43', textStyle: { color: '#8c8f98' } }
     ],
     series: [
       {
-        name: isAdjusted.value ? '美股 K 線 (還權息)' : '美股 K 線 (非還權)',
+        name: isAdjusted.value ? 'K 線 (還權息)' : 'K 線',
         type: 'candlestick',
         data: kLineValues,
+        itemStyle: { color: '#26a69a', color0: '#ef5350', borderColor: '#26a69a', borderColor0: '#ef5350' },
+        markLine: { symbol: ['none', 'none'], data: markLineData }
+      },
+      // 🔥 新增：成交量長條圖
+      {
+        name: '成交量',
+        type: 'bar',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: volumes,
         itemStyle: {
-          color: '#26a69a', color0: '#ef5350', borderColor: '#26a69a', borderColor0: '#ef5350' 
-        },
-        markLine: {
-          symbol: ['none', 'none'], data: markLineData
+          color: (params) => params.data[2] === 1 ? '#26a69a' : '#ef5350'
         }
       }
     ]
@@ -558,12 +614,8 @@ const renderChart = (dates, kLineValues) => {
 };
 
 const fetchData = async () => {
-  if (!ticker.value) {
-    error.value = '請輸入股票代號'; return;
-  }
-  
-  loading.value = true;
-  error.value = '';
+  if (!ticker.value) { error.value = '請輸入股票代號'; return; }
+  loading.value = true; error.value = '';
   
   try {
     const response = await fetch(`/api/stock?ticker=${ticker.value.toUpperCase()}&range=${range.value}`);
@@ -571,29 +623,21 @@ const fetchData = async () => {
       const errData = await response.json();
       throw new Error(errData.statusMessage || errData.message || '取得資料失敗');
     }
-    
     const data = await response.json();
     if (data.error) throw new Error(data.message);
     if (!data || data.length === 0) throw new Error('找不到該股票資料');
 
     rawData.value = data; 
-    
   } catch (err) {
-    error.value = err.message;
-    console.error(err);
+    error.value = err.message; console.error(err);
   } finally {
     loading.value = false;
   }
 };
 
-onMounted(() => { /* fetchData(); */ });
-
 onUnmounted(() => {
   if (resizeObserver) resizeObserver.disconnect();
-  if (chartInstance) {
-    chartInstance.dispose();
-    chartInstance = null;
-  }
+  if (chartInstance) { chartInstance.dispose(); chartInstance = null; }
 });
 </script>
 
@@ -615,17 +659,25 @@ onUnmounted(() => {
 }
 .ticker-input:focus { border-color: #2962ff; }
 
+/* 開關樣式共用 */
 .toggle-switch {
   display: flex; background-color: #2a2e39; border-radius: 6px;
   position: relative; cursor: pointer; padding: 4px; user-select: none; align-items: center;
 }
-.toggle-switch span { width: 70px; text-align: center; padding: 6px 0; font-size: 14px; color: #8c8f98; z-index: 1; transition: 0.3s; }
+.toggle-switch span { width: 70px; text-align: center; padding: 6px 0; font-size: 14px; color: #8c8f98; z-index: 1; transition: color 0.3s; }
 .toggle-switch span.active { color: #fff; font-weight: bold; }
 .toggle-switch .slider {
   position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px);
-  background-color: #2962ff; border-radius: 4px; transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  background-color: #2962ff; border-radius: 4px; transition: transform 0.3s ease;
 }
 .toggle-switch .slider.adjusted { transform: translateX(100%); }
+
+/* 🔥 三段式週期切換專用樣式 */
+.timeframe-switch span { width: 55px; }
+.timeframe-switch .slider { width: calc(33.33% - 4px); }
+.timeframe-switch .slider.daily { transform: translateX(0%); }
+.timeframe-switch .slider.weekly { transform: translateX(100%); }
+.timeframe-switch .slider.monthly { transform: translateX(200%); }
 
 .range-buttons { display: flex; background-color: #2a2e39; border-radius: 6px; overflow: hidden; }
 .range-buttons button { background: none; border: none; color: #b2b5be; padding: 10px 16px; font-size: 14px; cursor: pointer; }
@@ -686,6 +738,7 @@ onUnmounted(() => {
 .fs-7 { font-size: 0.85rem; }
 
 .error-message { background-color: rgba(239, 83, 80, 0.1); color: #ef5350; padding: 12px 16px; border-radius: 6px; margin-bottom: 24px; border: 1px solid rgba(239, 83, 80, 0.2); }
-.chart-wrapper { position: relative; width: 100%; height: 550px; border: 1px solid #2b2b43; border-radius: 8px; overflow: hidden; background-color: #1E222D; }
+/* 為了容納成交量，加高圖表容器高度 */
+.chart-wrapper { position: relative; width: 100%; height: 650px; border: 1px solid #2b2b43; border-radius: 8px; overflow: hidden; background-color: #1E222D; }
 .chart-container { width: 100%; height: 100%; }
 </style>
