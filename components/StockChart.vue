@@ -154,8 +154,18 @@
       <div class="opt-form-card mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
           <h5 class="m-0 text-white">設定評估部位</h5>
-          <div class="latest-price-badge">
-            最新參考價: <span class="fw-bold text-warning fs-4">${{ latestClosePrice.toFixed(2) }}</span>
+          
+          <!-- 🔥 新增：區間最高價、最低價顯示 -->
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <div class="latest-price-badge">
+              <span class="text-muted fs-7">區間最高價:</span> <span class="fw-bold text-success">${{ periodExtremes.high.toFixed(2) }}</span>
+            </div>
+            <div class="latest-price-badge">
+              <span class="text-muted fs-7">區間最低價:</span> <span class="fw-bold text-danger">${{ periodExtremes.low.toFixed(2) }}</span>
+            </div>
+            <div class="latest-price-badge border-warning">
+              <span class="text-muted fs-7">最新參考價:</span> <span class="fw-bold text-warning fs-5">${{ latestClosePrice.toFixed(2) }}</span>
+            </div>
           </div>
         </div>
         
@@ -360,12 +370,23 @@ const processedData = computed(() => {
       o *= ratio; c *= ratio; l *= ratio; h *= ratio;
     }
     kLineValues.push([o, c, l, h]);
-    
-    // 🔥 徹底修復：在這裡只推入純數字，不再包裝為物件！
     volumes.push(item.volume);
   });
 
   return { dates, kLineValues, volumes };
+});
+
+// 🔥 新增：動態計算當前查詢區間的最高與最低價
+const periodExtremes = computed(() => {
+  const kValues = processedData.value.kLineValues;
+  if (!kValues || kValues.length === 0) return { high: 0, low: 0 };
+  let high = -Infinity;
+  let low = Infinity;
+  kValues.forEach(k => {
+    if (k[3] > high) high = k[3]; // k[3] 是 high
+    if (k[2] < low) low = k[2];   // k[2] 是 low
+  });
+  return { high, low };
 });
 
 const setRange = (newRange) => {
@@ -561,11 +582,11 @@ const renderChart = (dates, kLineValues, volumes) => {
     backgroundColor: 'transparent',
     tooltip: { 
       trigger: 'axis', 
-      axisPointer: { type: 'cross' },
+      axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] },
       formatter: function (params) {
         const dataIdx = params[0].dataIndex;
         const kData = kLineValues[dataIdx];
-        const vData = volumes[dataIdx]; // 🔥 現在這裡會抓到正確的純數字了！
+        const vData = volumes[dataIdx]; 
         
         let res = `<div style="font-weight:bold;margin-bottom:8px;border-bottom:1px solid #434651;padding-bottom:5px;color:#fff;">${dates[dataIdx]}</div>`;
         
@@ -578,7 +599,6 @@ const renderChart = (dates, kLineValues, volumes) => {
           res += `<div style="display:flex;justify-content:space-between;gap:24px;"><span>最高:</span> <span style="font-weight:bold;color:#d1d4dc;">${Number(kData[3]).toFixed(2)}</span></div>`;
         }
         if (vData !== undefined) {
-          // 加入千分位格式化
           const volStr = vData > 0 ? Number(vData).toLocaleString() : '無資料 / 0';
           res += `<div style="display:flex;justify-content:space-between;gap:24px;margin-top:8px;border-top:1px solid #434651;padding-top:8px;"><span>成交量:</span> <span style="font-weight:bold;color:#e0ac00;">${volStr}</span></div>`;
         }
@@ -616,7 +636,6 @@ const renderChart = (dates, kLineValues, volumes) => {
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
-        // 🔥 將純數字陣列動態映射為包含顏色的物件
         data: volumes.map((vol, idx) => ({
           value: vol,
           itemStyle: { color: kLineValues[idx][1] >= kLineValues[idx][0] ? '#26a69a' : '#ef5350' }
@@ -748,6 +767,7 @@ onUnmounted(() => {
 .prob-table th { color: #8c8f98; font-weight: 500; text-align: right; }
 .prob-table tbody tr:hover { background-color: rgba(255,255,255,0.02); }
 
+/* 🔥 選擇權回測模組樣式 */
 .opt-prob-wrapper { background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
 .opt-form-card { background-color: #2a2e39; padding: 20px; border-radius: 8px; border: 1px solid #434651; }
 .latest-price-badge { background-color: #131722; padding: 8px 16px; border-radius: 6px; border: 1px solid #434651; }
