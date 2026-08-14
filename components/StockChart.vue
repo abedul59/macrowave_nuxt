@@ -151,11 +151,19 @@
     <div class="opt-prob-wrapper" v-if="processedData.kLineValues.length > 0 && !loading && !error">
       <h3 class="prob-title text-warning border-bottom border-secondary pb-2 mb-3">🦅 選擇權履約價風險回測矩陣</h3>
       
+      <!-- 🔥 新增：詳細解說面板 -->
+      <div class="opt-explanation mb-4">
+        <h5 class="fw-bold text-warning mb-2">💡 兩張表的關係與機率計算邏輯</h5>
+        <ul class="mb-0 ps-3">
+          <li class="mb-2"><strong>兩表關聯：</strong>上半部「大盤波段目標」是股票的<b>基礎體質慣性</b>（固定幅度）。本區塊則是<b>專屬實戰風險</b>，系統會自動換算您輸入的履約價與「最新參考價」相距幾 %，再用該 % 數去調用與上方完全相同的演算法，得出更貼近真實操作的風險機率。</li>
+          <li class="mb-2"><strong>滾動回測 (Rolling Backtest)：</strong>機率並非只看頭尾。系統會把所選歷史區間內的<b>「每一個交易日」都當作進場點</b>，並往未來 N 週內展開一個「滑動窗口」進行地毯式掃描。</li>
+          <li><strong>嚴格的觸及判定：</strong>作為選擇權賣方最怕盤中被洗出場。因此系統的判定標準是<b>「盤中最高價 / 最低價」</b>而非收盤價。只要在觀察窗口內，極端價格曾被「插針」掃到（漲破 Call 或 跌破 Put），就會被無情地記上一筆敗績。機率 ＝ <code>(觸及總次數 ÷ 總測試窗口數)</code>。</li>
+        </ul>
+      </div>
+
       <div class="opt-form-card mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
           <h5 class="m-0 text-white">設定評估部位</h5>
-          
-          <!-- 🔥 修復：文字標籤清晰化與徽章美化 -->
           <div class="d-flex flex-wrap gap-3 align-items-center">
             <div class="latest-price-badge">
               <span class="badge-label">區間最高價:</span> <span class="fw-bold text-success">${{ periodExtremes.high.toFixed(2) }}</span>
@@ -766,11 +774,10 @@ onUnmounted(() => {
 .prob-table th { color: #8c8f98; font-weight: 500; text-align: right; }
 .prob-table tbody tr:hover { background-color: rgba(255,255,255,0.02); }
 
-/* 🔥 選擇權回測模組樣式 */
+/* 🔥 選擇權回測模組與解說樣式 */
 .opt-prob-wrapper { background-color: #1e222d; border: 1px solid #2b2b43; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+.opt-explanation { background-color: rgba(224, 172, 0, 0.05); border-left: 4px solid #e0ac00; padding: 16px; border-radius: 0 6px 6px 0; color: #d1d4dc; font-size: 0.95rem; line-height: 1.6; }
 .opt-form-card { background-color: #2a2e39; padding: 20px; border-radius: 8px; border: 1px solid #434651; }
-
-/* 🌟 修復對比度：使用亮灰色與光暈徽章 */
 .latest-price-badge { background-color: #1e222d; padding: 10px 16px; border-radius: 6px; border: 1px solid #434651; display: flex; align-items: center; gap: 8px; }
 .latest-price-badge.highlight-badge { border-color: #e0ac00 !important; background-color: rgba(224, 172, 0, 0.1); }
 .badge-label { color: #d1d4dc; font-size: 0.85rem; }
